@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="es"><!-- v17 -->
+<html lang="es"><!-- v18 -->
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
-  <title>Portal Colaborativo — Xperts IT v17</title>
+  <title>Portal Colaborativo — Xperts IT v18</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#F4F2FB;}</style>
 </head>
@@ -13,6 +13,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
   <script>
+
 
 
 
@@ -29,14 +30,19 @@ var CRM_STAGES = [
   {id:"Oportunidad Perdida", color:"#EF4444", bg:"#FEF2F2"}
 ];
 
-var CRM_EXECS = (portalUsers && portalUsers.length > 0)
-  ? portalUsers.filter(function(u){ return u.active !== false && u.active !== 0 && u.active !== "false"; })
-                .map(function(u){ return u.name.split(" ")[0]; })
-  : ["Ana","Rocio","Leandro"];
+var CRM_EXECS = ["Ana","Rocio","Leandro"]; // overridden inside component
 var CRM_TYPES = ["Por definir","ERP","RRHH/Visma","Fluig/BPM","Portal de Proveedores","CRM","TCOP","Recruiting IT"];
 var CRM_RUBROS = ["Servicios/Otros","Construcci\u00f3n","Industria/Manufactura","Comercio/Distribuci\u00f3n","Tecnolog\u00eda","Finanzas/Fintech","RRHH/Servicios","Salud","Educaci\u00f3n","Turismo/Transporte"];
 
 function CRMViewInner({users: portalUsers}) {
+  // Compute execs from portal users, fallback to defaults
+  var CRM_EXECS = (portalUsers && portalUsers.length > 0)
+    ? portalUsers
+        .filter(function(u){ return u.active !== false && u.active !== 0 && u.active !== "false" && u.active !== "0"; })
+        .map(function(u){ return u.name ? u.name.split(" ")[0] : u.name; })
+        .filter(function(n){ return n && n.length > 0; })
+    : ["Ana","Rocio","Leandro"];
+  if(CRM_EXECS.length === 0) CRM_EXECS = ["Ana","Rocio","Leandro"];
   var LS_KEY = "xpcrm_deals_v3";
   var loadLocal = () => { try { var d=localStorage.getItem(LS_KEY); return d?JSON.parse(d):null; } catch(e){return null;} };
   var saveLocal = (d) => { try { localStorage.setItem(LS_KEY, JSON.stringify(d)); } catch(e){} };
@@ -397,6 +403,7 @@ function CRMViewInner({users: portalUsers}) {
     renderEditModal()
   );
 }
+
 
 
 
