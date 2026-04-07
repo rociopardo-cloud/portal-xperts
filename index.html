@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="es"><!-- v19 -->
+<html lang="es"><!-- v20 -->
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
-  <title>Portal Colaborativo — Xperts IT v19</title>
+  <title>Portal Colaborativo — Xperts IT v20</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#F4F2FB;}</style>
 </head>
@@ -13,6 +13,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
   <script>
+
 
 
 
@@ -38,7 +39,15 @@ var CRM_RUBROS = ["Servicios/Otros","Construcci\u00f3n","Industria/Manufactura",
 function CRMViewInner(props) {
   var portalUsers = (props && props.users) ? props.users : [];
   var rawExecs = portalUsers
-    .filter(function(u){ return u && u.name && (u.active === true || u.active === 1 || u.active === "true" || u.active === "1" || u.active === "TRUE"); })
+    .filter(function(u){
+      if(!u || !u.name) return false;
+      var isActive = u.active === true || u.active === 1 || u.active === "true" || u.active === "1" || u.active === "TRUE";
+      if(!isActive) return false;
+      // Only include users with CRM access: superadmin, admin, or has "crm" in depts
+      var role = (u.role||"").toLowerCase();
+      var depts = Array.isArray(u.depts) ? u.depts : (typeof u.depts === "string" ? JSON.parse(u.depts||"[]") : []);
+      return role === "superadmin" || role === "admin" || depts.indexOf("crm") >= 0;
+    })
     .map(function(u){ return u.name.split(" ")[0]; });
   var CRM_EXECS = rawExecs.length > 0 ? rawExecs : ["Ana","Rocio","Leandro"];
   var LS_KEY = "xpcrm_deals_v3";
@@ -401,6 +410,7 @@ function CRMViewInner(props) {
     renderEditModal()
   );
 }
+
 
 
 
