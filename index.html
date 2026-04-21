@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
-  <title>Portal Colaborativo — Xperts IT v94</title>
+  <title>Portal Colaborativo — Xperts IT v95</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#F4F2FB;}</style>
 </head>
@@ -785,7 +785,7 @@ React.createElement("span",{style:{fontSize:11,background:isActive?"#D1FAE5":"#F
 React.createElement("span",{style:{fontSize:11,color:"#9CA3AF"}},(u.vacacionesTomadas||0)+"/"+(u.vacacionesTotal||0)+"d vac."),(u.clientes&&u.clientes.length>0)&&React.createElement("span",{style:{fontSize:11,background:"#EEF2FF",color:"#7C3AED",borderRadius:20,padding:"1px 7px"}},u.clientes.length+(u.clientes.length===1?" cliente":" clientes"))));
 })));
 },MiPerfilView=({currentUser,users,colabs,setColabs,clients,vacationRequests,setVacationRequests})=>{
-var xColab=(colabs||[]).find(function(c){return c.userId===currentUser.id||c.userId===Number(currentUser.id)||c.email===currentUser.email||String(c.id)==="c"+currentUser.id;});var xUserBase=(users||[]).find(function(u){return u.id===currentUser.id;})||currentUser;const user=xColab?{...xUserBase,...xColab,nombre:xColab.nombre||xUserBase.name,name:xUserBase.name}:xUserBase;
+var xColab=(colabs||[]).find(function(c){return (c.userId&&(c.userId===currentUser.id||c.userId===Number(currentUser.id)))||c.email===currentUser.email;});var xUserBase=(users||[]).find(function(u){return u.id===currentUser.id;})||currentUser;const user=xColab?{...xUserBase,...xColab,nombre:xColab.nombre||xUserBase.name,name:xUserBase.name}:xUserBase;
 const[editData,setEditData]=useState({celular:user.celular||"",email:user.email||"",emailPersonal:user.emailPersonal||"",cumpleanos:xCleanDate(user.cumpleanos),direccion:user.direccion||""});
 const[saved,setSaved]=useState(false),[showVacForm,setShowVacForm]=useState(false),[vacForm,setVacForm]=useState({fechaInicio:"",fechaFin:"",motivo:""}),[vacSent,setVacSent]=useState(false);
 const myVacs=(vacationRequests||[]).filter(r=>r.userId===user.id);
