@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <title>Portal Colaborativo — Xperts IT v151</title>
+  <title>Portal Colaborativo — Xperts IT v152</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#F4F2FB;}</style>
 </head>
@@ -884,12 +884,14 @@ var FacturacionView=function(xFCProps){
   var xFmt=function(v){var n=xNum(v);return n?n.toLocaleString("es-AR"):"-";};var xFmtDate=function(v){if(!v||v==="-")return"-";var s=String(v);var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return s;};
 
   var xSaveField=function(sheet,id,field,val){try{fetch(xFCGas,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify({action:"update",sheet:sheet,id:String(id),data:{[field]:val}})});}catch(e){}};var xFE=xEmitidas.filter(function(r){
+    if(!r.cliente&&!r.monto&&!r.nro_factura&&!r.concepto)return false;
     if(xFMesE){var xPl=(r.anio||"")+(r.mes?" "+r.mes:"");if(xPl!==xFMesE)return false;}
     if(xFClienteE&&String(r.cliente||"")!==xFClienteE)return false;
     if(xFEstadoE&&String(r.pago||"")!==xFEstadoE)return false;
     return true;
   });
   var xFR=xRecibidas.filter(function(r){
+    if(!r.colaborador&&!r.total_pagar&&!r.honorarios_actuales&&!r.valor_hora)return false;
     var rMes=(r.anio||"")+(r.mes?" "+r.mes:"");
     if(xFMesR&&rMes!==xFMesR)return false;
     if(xFColabR&&String(r.colaborador||"")!==xFColabR)return false;
