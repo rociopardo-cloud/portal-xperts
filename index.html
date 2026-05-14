@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <title>Portal Colaborativo — Xperts IT v152</title>
+  <title>Portal Colaborativo — Xperts IT v154</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#F4F2FB;}</style>
 </head>
@@ -874,8 +874,8 @@ var FacturacionView=function(xFCProps){
       fetch(xFCGas+"?sheet=facturas_emitidas",{redirect:"follow"}).then(function(r){return r.json();}).catch(function(){return{ok:false,data:[]};}),
       fetch(xFCGas+"?sheet=facturas_recibidas",{redirect:"follow"}).then(function(r){return r.json();}).catch(function(){return{ok:false,data:[]};})
     ]).then(function(res){
-      if(res[0].ok&&Array.isArray(res[0].data))xSetEmitidas(res[0].data);
-      if(res[1].ok&&Array.isArray(res[1].data))xSetRecibidas(res[1].data);
+      var xParseSheet=function(r){if(!r)return[];if(Array.isArray(r))return r;if(r.ok&&Array.isArray(r.data))return r.data;if(Array.isArray(r.data))return r.data;return[];};xSetEmitidas(xParseSheet(res[0]));
+      xSetRecibidas(xParseSheet(res[1]));
       xSetLoading(false);
     });
   },[]);
@@ -899,9 +899,9 @@ var FacturacionView=function(xFCProps){
     return true;
   });
 
-  var xMesesE=[...new Set(xEmitidas.map(function(r){if(!r.periodo)return "";var p=String(r.periodo);var m=p.match(/^(\d{4})-(\d{2})/);return m?(m[1]+" "+(xMMap2[m[2]]||m[2])):"";}).filter(Boolean))].sort(function(a,b){var pa=a.split(" "),pb=b.split(" ");var ya=parseInt(pa[0]||0),yb=parseInt(pb[0]||0);if(ya!==yb)return yb-ya;var mo=function(s){return{"enero":1,"febrero":2,"marzo":3,"abril":4,"mayo":5,"junio":6,"julio":7,"agosto":8,"septiembre":9,"octubre":10,"noviembre":11,"diciembre":12}[s]||0;};return mo((pb[1]||"").toLowerCase())-mo((pa[1]||"").toLowerCase());});
+  var xMesesE=[...new Set(xEmitidas.map(function(r){return(r.anio||"")+(r.mes?" "+r.mes:"");}).filter(Boolean))].sort(function(a,b){var xMO={"enero":1,"febrero":2,"marzo":3,"abril":4,"mayo":5,"junio":6,"julio":7,"agosto":8,"septiembre":9,"octubre":10,"noviembre":11,"diciembre":12};var pa=a.split(" "),pb=b.split(" ");var ya=parseInt(pa[0]||0),yb=parseInt(pb[0]||0);if(ya!==yb)return yb-ya;return (xMO[(pb[1]||"").toLowerCase()]||0)-(xMO[(pa[1]||"").toLowerCase()]||0);});
   var xClientesE=[...new Set(xEmitidas.map(function(r){return r.cliente||"";}).filter(Boolean))].sort();
-  var xMesesR=[...new Set(xRecibidas.map(function(r){return(r.anio||"")+(r.mes?" "+r.mes:"");}).filter(Boolean))].sort().reverse();
+  var xMesesR=[...new Set(xRecibidas.map(function(r){return(r.anio||"")+(r.mes?" "+r.mes:"");}).filter(Boolean))].sort(function(a,b){var xMO={"enero":1,"febrero":2,"marzo":3,"abril":4,"mayo":5,"junio":6,"julio":7,"agosto":8,"septiembre":9,"octubre":10,"noviembre":11,"diciembre":12};var pa=a.split(" "),pb=b.split(" ");var ya=parseInt(pa[0]||0),yb=parseInt(pb[0]||0);if(ya!==yb)return yb-ya;return (xMO[(pb[1]||"").toLowerCase()]||0)-(xMO[(pa[1]||"").toLowerCase()]||0);});
   var xColabsR=[...new Set(xRecibidas.map(function(r){return r.colaborador||"";}).filter(Boolean))].sort();
 
   var xBadge=function(val){
@@ -924,9 +924,9 @@ var FacturacionView=function(xFCProps){
     var xMargen=xTotalEmitido>0?Math.round((xRent/xTotalEmitido)*100):0;
 
     // Month data for charts
-    var xPeriodos=[...new Set(xEmitidas.map(function(r){return r.periodo||"";}))].filter(Boolean).sort();
+    var xPeriodos=[...new Set(xEmitidas.map(function(r){return(r.anio||"")+(r.mes?" "+r.mes:"");}))].filter(Boolean).sort();
     var xMesData=xPeriodos.map(function(mes){
-      var emRows=xEmitidas.filter(function(r){return r.periodo===mes;});
+      var emRows=xEmitidas.filter(function(r){return((r.anio||"")+(r.mes?" "+r.mes:""))===mes;});
       var facturado=emRows.reduce(function(s,r){return s+xNum(r.monto)+xNum(r.iva);},0);
       var cobrado=emRows.filter(function(r){return r.pago==="PAGADO";}).reduce(function(s,r){return s+xNum(r.monto)+xNum(r.iva);},0);
       var mesParts=mes.split(" ");var anioNum=mesParts[0];var mesNombre=(mesParts[1]||"").toLowerCase();
