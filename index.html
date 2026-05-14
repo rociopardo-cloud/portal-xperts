@@ -861,7 +861,7 @@ var FacturacionView=function(xFCProps){
   var [xEmitidas,xSetEmitidas]=useState([]);
   var [xRecibidas,xSetRecibidas]=useState([]);
   var [xLoading,xSetLoading]=useState(true);
-  var [xFMesE,xSetFMesE]=useState("");
+  var [xFMesE,xSetFMesE]=useState("2026 mayo");
   var [xFClienteE,xSetFClienteE]=useState("");
   var [xFEstadoE,xSetFEstadoE]=useState("");
   var [xFMesR,xSetFMesR]=useState("");
@@ -883,7 +883,7 @@ var FacturacionView=function(xFCProps){
   var xNum=function(v){return parseFloat(String(v||"0").replace(/\./g,"").replace(",","."))||0;};
   var xFmt=function(v){var n=xNum(v);return n?n.toLocaleString("es-AR"):"-";};var xFmtDate=function(v){if(!v||v==="-")return"-";var s=String(v);var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return s;};
 
-  var xSaveField=function(sheet,id,field,val){try{fetch(xFCGas,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify({action:"update",sheet:sheet,id:String(id),data:{[field]:val}})});}catch(e){}};var xFE=xEmitidas.filter(function(r){
+  var xMMap2={"01":"enero","02":"febrero","03":"marzo","04":"abril","05":"mayo","06":"junio","07":"julio","08":"agosto","09":"septiembre","10":"octubre","11":"noviembre","12":"diciembre"};var xSaveField=function(sheet,id,field,val){try{fetch(xFCGas,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify({action:"update",sheet:sheet,id:String(id),data:{[field]:val}})});}catch(e){}};var xFE=xEmitidas.filter(function(r){
     if(xFMesE){var xP=String(r.periodo||"");var xPm=xP.match(/^(\d{4})-(\d{2})/);var xPl=xPm?(xPm[1]+" "+(xMMap2[xPm[2]]||xPm[2])):"";if(xPl!==xFMesE)return false;}
     if(xFClienteE&&String(r.cliente||"")!==xFClienteE)return false;
     if(xFEstadoE&&String(r.pago||"")!==xFEstadoE)return false;
@@ -897,7 +897,7 @@ var FacturacionView=function(xFCProps){
     return true;
   });
 
-  var xMesesE=[...new Set(xEmitidas.map(function(r){return r.periodo||"";}).filter(Boolean))].sort().reverse();
+  var xMesesE=[...new Set(xEmitidas.map(function(r){if(!r.periodo)return "";var p=String(r.periodo);var m=p.match(/^(\d{4})-(\d{2})/);return m?(m[1]+" "+(xMMap2[m[2]]||m[2])):"";}).filter(Boolean))].sort(function(a,b){var pa=a.split(" "),pb=b.split(" ");var ya=parseInt(pa[0]||0),yb=parseInt(pb[0]||0);if(ya!==yb)return yb-ya;var mo=function(s){return{"enero":1,"febrero":2,"marzo":3,"abril":4,"mayo":5,"junio":6,"julio":7,"agosto":8,"septiembre":9,"octubre":10,"noviembre":11,"diciembre":12}[s]||0;};return mo((pb[1]||"").toLowerCase())-mo((pa[1]||"").toLowerCase());});
   var xClientesE=[...new Set(xEmitidas.map(function(r){return r.cliente||"";}).filter(Boolean))].sort();
   var xMesesR=[...new Set(xRecibidas.map(function(r){return(r.anio||"")+(r.mes?" "+r.mes:"");}).filter(Boolean))].sort().reverse();
   var xColabsR=[...new Set(xRecibidas.map(function(r){return r.colaborador||"";}).filter(Boolean))].sort();
