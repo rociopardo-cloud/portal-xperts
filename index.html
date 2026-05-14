@@ -861,18 +861,18 @@ var FacturacionView=function(xFCProps){
   var [xEmitidas,xSetEmitidas]=useState([]);
   var [xRecibidas,xSetRecibidas]=useState([]);
   var [xLoading,xSetLoading]=useState(true);
-  var [xFMesE,xSetFMesE]=useState("2026-05");
+  var [xFMesE,xSetFMesE]=useState("");
   var [xFClienteE,xSetFClienteE]=useState("");
   var [xFEstadoE,xSetFEstadoE]=useState("");
-  var [xFMesR,xSetFMesR]=useState("2026 mayo");
+  var [xFMesR,xSetFMesR]=useState("");
   var [xFColabR,xSetFColabR]=useState("");
   var [xFEstadoR,xSetFEstadoR]=useState("");
 
   React.useEffect(function(){
     xSetLoading(true);
     Promise.all([
-      fetch(xFCGas+"?sheet=facturas_emitidas").then(function(r){return r.json();}).catch(function(){return{ok:false,data:[]};}),
-      fetch(xFCGas+"?sheet=facturas_recibidas").then(function(r){return r.json();}).catch(function(){return{ok:false,data:[]};})
+      fetch(xFCGas+"?sheet=facturas_emitidas",{redirect:"follow"}).then(function(r){return r.json();}).catch(function(){return{ok:false,data:[]};}),
+      fetch(xFCGas+"?sheet=facturas_recibidas",{redirect:"follow"}).then(function(r){return r.json();}).catch(function(){return{ok:false,data:[]};})
     ]).then(function(res){
       if(res[0].ok&&Array.isArray(res[0].data))xSetEmitidas(res[0].data);
       if(res[1].ok&&Array.isArray(res[1].data))xSetRecibidas(res[1].data);
@@ -884,7 +884,7 @@ var FacturacionView=function(xFCProps){
   var xFmt=function(v){var n=xNum(v);return n?n.toLocaleString("es-AR"):"-";};var xFmtDate=function(v){if(!v||v==="-")return"-";var s=String(v);var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return s;};
 
   var xSaveField=function(sheet,id,field,val){try{fetch(xFCGas,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify({action:"update",sheet:sheet,id:String(id),data:{[field]:val}})});}catch(e){}};var xFE=xEmitidas.filter(function(r){
-    if(xFMesE&&String(r.periodo||"")!==xFMesE)return false;
+    if(xFMesE){var xP=String(r.periodo||"");var xPm=xP.match(/^(\d{4})-(\d{2})/);var xPl=xPm?(xPm[1]+" "+(xMMap2[xPm[2]]||xPm[2])):"";if(xPl!==xFMesE)return false;}
     if(xFClienteE&&String(r.cliente||"")!==xFClienteE)return false;
     if(xFEstadoE&&String(r.pago||"")!==xFEstadoE)return false;
     return true;
@@ -897,9 +897,9 @@ var FacturacionView=function(xFCProps){
     return true;
   });
 
-  var xMesesE=[...new Set(xEmitidas.map(function(r){return r.periodo||"";}).filter(Boolean))].sort(function(a,b){return b.localeCompare(a);});
+  var xMesesE=[...new Set(xEmitidas.map(function(r){return r.periodo||"";}).filter(Boolean))].sort().reverse();
   var xClientesE=[...new Set(xEmitidas.map(function(r){return r.cliente||"";}).filter(Boolean))].sort();
-  var xMMap={"enero":1,"febrero":2,"marzo":3,"abril":4,"mayo":5,"junio":6,"julio":7,"agosto":8,"septiembre":9,"octubre":10,"noviembre":11,"diciembre":12};var xMesesR=[...new Set(xRecibidas.map(function(r){return(r.anio||"")+(r.mes?" "+r.mes:"");}).filter(Boolean))].sort(function(a,b){var pa=a.split(" "),pb=b.split(" ");var ya=parseInt(pa[0]||0),yb=parseInt(pb[0]||0);if(ya!==yb)return yb-ya;var ma=xMMap[(pa[1]||"").toLowerCase()]||0,mb=xMMap[(pb[1]||"").toLowerCase()]||0;return mb-ma;});
+  var xMesesR=[...new Set(xRecibidas.map(function(r){return(r.anio||"")+(r.mes?" "+r.mes:"");}).filter(Boolean))].sort().reverse();
   var xColabsR=[...new Set(xRecibidas.map(function(r){return r.colaborador||"";}).filter(Boolean))].sort();
 
   var xBadge=function(val){
@@ -1099,7 +1099,7 @@ var FacturacionView=function(xFCProps){
         React.createElement("div",{style:{overflowX:"auto"}},
           React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:12}},
             React.createElement("thead",null,React.createElement("tr",null,
-              xTH("Período",80),xTH("Facturado",100),xTH("Cobrado",100),
+              xTH("Año / Mes",90),xTH("Facturado",100),xTH("Cobrado",100),
               xTH("Sueldos",100),xTH("Rentabilidad",110),xTH("Margen",70),
               xTH("Facturas",70),xTH("Pendientes",80)
             )),
@@ -1149,7 +1149,7 @@ var FacturacionView=function(xFCProps){
               var bg=ri%2===0?"#fff":"#FAFAFA";
               var total=xNum(row.monto)+xNum(row.iva);
               return React.createElement("tr",{key:ri,style:{background:bg}},
-                xTD(xFmtDate(row.periodo)),xTD(row.cliente||"-"),xTD(row.concepto||"-"),xTD(row.nro_factura||"-"),
+                xTD((function(){if(!row.periodo)return"-";var xP2=String(row.periodo);var xPm2=xP2.match(/^(\d{4})-(\d{2})/);return xPm2?(xPm2[1]+" "+(xMMap2[xPm2[2]]||xPm2[2])):xP2;}())),xTD(row.cliente||"-"),xTD(row.concepto||"-"),xTD(row.nro_factura||"-"),
                 xTD(xFmt(row.base_imponible),"right"),xTD(xFmt(row.monto),"right"),
                 xTD(total>0?total.toLocaleString("es-AR"):xFmt(row.iva),"right","#F5F3FF"),
                 xTD(row.cuit||"-"),xTD(React.createElement("select",{value:row.pago||"PENDIENTE",onChange:function(e){var newVal=e.target.value;xSetEmitidas(function(prev){return prev.map(function(r2,i2){return i2===ri?{...r2,pago:newVal}:r2;});});xSaveField("facturas_emitidas",row.id||ri,"pago",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.pago==="PAGADA"?"#D1FAE5":row.pago==="ENVIADA"?"#DBEAFE":row.pago==="ANULADO"?"#F3F4F6":"#FEF3C7",color:row.pago==="PAGADA"?"#065F46":row.pago==="ENVIADA"?"#1D4ED8":row.pago==="ANULADO"?"#374151":"#92400E"}},React.createElement("option",{value:"PENDIENTE"},"PENDIENTE"),React.createElement("option",{value:"ENVIADA"},"ENVIADA"),React.createElement("option",{value:"PAGADA"},"PAGADA"),React.createElement("option",{value:"ANULADO"},"ANULADO"))),xTD(React.createElement("input",{type:"text",defaultValue:row.notas||"",onBlur:function(e){var newVal=e.target.value;xSetEmitidas(function(prev){return prev.map(function(r2,i2){return i2===ri?{...r2,notas:newVal}:r2;});});xSaveField("facturas_emitidas",row.id||ri,"notas",newVal);},style:{border:"none",borderBottom:"1px solid transparent",background:"transparent",fontSize:11,padding:"2px 4px",width:"100%",minWidth:160,outline:"none",fontFamily:"inherit"},onFocus:function(e){e.target.style.borderBottomColor="#7C3AED";e.target.style.background="#F5F3FF";}}))
