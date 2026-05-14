@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <title>Portal Colaborativo — Xperts IT v146</title>
+  <title>Portal Colaborativo — Xperts IT v147</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#F4F2FB;}</style>
 </head>
@@ -881,9 +881,9 @@ var FacturacionView=function(xFCProps){
   },[]);
 
   var xNum=function(v){return parseFloat(String(v||"0").replace(/\./g,"").replace(",","."))||0;};
-  var xFmt=function(v){var n=xNum(v);return n?n.toLocaleString("es-AR"):"-";};
+  var xFmt=function(v){var n=xNum(v);return n?n.toLocaleString("es-AR"):"-";};var xFmtDate=function(v){if(!v||v==="-")return"-";var s=String(v);var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return s;};
 
-  var xFE=xEmitidas.filter(function(r){
+  var xSaveField=function(sheet,id,field,val){try{fetch(xFCGas,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify({action:"update",sheet:sheet,id:String(id),data:{[field]:val}})});}catch(e){}};var xFE=xEmitidas.filter(function(r){
     if(xFMesE&&String(r.periodo||"")!==xFMesE)return false;
     if(xFClienteE&&String(r.cliente||"")!==xFClienteE)return false;
     if(xFEstadoE&&String(r.pago||"")!==xFEstadoE)return false;
@@ -1132,7 +1132,7 @@ var FacturacionView=function(xFCProps){
         React.createElement("span",{style:{fontSize:12,fontWeight:700,color:"#374151"}},"🔍 Filtros:"),
         React.createElement("select",{value:xFMesE,onChange:function(e){xSetFMesE(e.target.value);},style:xSel},React.createElement("option",{value:""},"Todos los meses"),xMesesE.map(function(m){return React.createElement("option",{key:m,value:m},m);})),
         React.createElement("select",{value:xFClienteE,onChange:function(e){xSetFClienteE(e.target.value);},style:{...xSel,maxWidth:200}},React.createElement("option",{value:""},"Todos los clientes"),xClientesE.map(function(c){return React.createElement("option",{key:c,value:c},c);})),
-        React.createElement("select",{value:xFEstadoE,onChange:function(e){xSetFEstadoE(e.target.value);},style:xSel},React.createElement("option",{value:""},"Todos los estados"),["PENDIENTE","PAGADO","ANULADO"].map(function(s){return React.createElement("option",{key:s,value:s},s);})),
+        React.createElement("select",{value:xFEstadoE,onChange:function(e){xSetFEstadoE(e.target.value);},style:xSel},React.createElement("option",{value:""},"Todos los estados"),["PENDIENTE","ENVIADA","PAGADA","ANULADO"].map(function(s){return React.createElement("option",{key:s,value:s},s);})),
         React.createElement("button",{onClick:function(){xSetFMesE("");xSetFClienteE("");xSetFEstadoE("");},style:{background:"#F3F4F6",border:"none",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:12}},"Limpiar"),
         React.createElement("span",{style:{fontSize:11,color:"#9CA3AF"}},xFE.length+" registros")
       ),
@@ -1149,10 +1149,10 @@ var FacturacionView=function(xFCProps){
               var bg=ri%2===0?"#fff":"#FAFAFA";
               var total=xNum(row.monto)+xNum(row.iva);
               return React.createElement("tr",{key:ri,style:{background:bg}},
-                xTD(row.periodo||"-"),xTD(row.cliente||"-"),xTD(row.nro_factura||"-"),
+                xTD(xFmtDate(row.periodo)),xTD(row.cliente||"-"),xTD(row.nro_factura||"-"),
                 xTD(xFmt(row.base_imponible),"right"),xTD(xFmt(row.monto),"right"),
                 xTD(total>0?total.toLocaleString("es-AR"):xFmt(row.iva),"right","#F5F3FF"),
-                xTD(row.cuit||"-"),xTD(xBadge(row.pago)),xTD(row.notas||"-")
+                xTD(row.cuit||"-"),xTD(React.createElement("select",{value:row.pago||"PENDIENTE",onChange:function(e){var newVal=e.target.value;xSetEmitidas(function(prev){return prev.map(function(r2,i2){return i2===ri?{...r2,pago:newVal}:r2;});});xSaveField("facturas_emitidas",row.id||ri,"pago",newVal);},style:{border:"none",background:"transparent",fontSize:11,fontWeight:700,color:row.pago==="PAGADA"?"#065F46":row.pago==="ENVIADA"?"#1D4ED8":"#92400E",cursor:"pointer",padding:"2px 4px"}},React.createElement("option",{value:"PENDIENTE"},"PENDIENTE"),React.createElement("option",{value:"ENVIADA"},"ENVIADA"),React.createElement("option",{value:"PAGADA"},"PAGADA"))),xTD(React.createElement("input",{type:"text",defaultValue:row.notas||"",onBlur:function(e){var newVal=e.target.value;xSetEmitidas(function(prev){return prev.map(function(r2,i2){return i2===ri?{...r2,notas:newVal}:r2;});});xSaveField("facturas_emitidas",row.id||ri,"notas",newVal);},style:{border:"none",borderBottom:"1px solid transparent",background:"transparent",fontSize:11,padding:"2px 4px",width:"100%",minWidth:160,outline:"none",fontFamily:"inherit"},onFocus:function(e){e.target.style.borderBottomColor="#7C3AED";e.target.style.background="#F5F3FF";}}))
               );
             }),
             React.createElement("tr",{style:{background:"#F5F3FF",fontWeight:800}},
@@ -1166,10 +1166,10 @@ var FacturacionView=function(xFCProps){
         )
       ),
       React.createElement("div",{style:{marginTop:16,display:"flex",gap:12,flexWrap:"wrap"}},
-        ["PENDIENTE","PAGADO","ANULADO"].map(function(est){
+        ["PENDIENTE","ENVIADA","PAGADA","ANULADO"].map(function(est){
           var rows=xFE.filter(function(r){return(r.pago||"PENDIENTE")===est;});
           var tot=rows.reduce(function(s,r){return s+xNum(r.monto)+xNum(r.iva);},0);
-          var colors={"PENDIENTE":["#FEF3C7","#92400E"],"PAGADO":["#D1FAE5","#065F46"],"ANULADO":["#F3F4F6","#374151"]};
+          var colors={"PENDIENTE":["#FEF3C7","#92400E"],"ENVIADA":["#DBEAFE","#1D4ED8"],"PAGADA":["#D1FAE5","#065F46"],"ANULADO":["#F3F4F6","#374151"]};
           return React.createElement("div",{key:est,style:{background:colors[est][0],borderRadius:10,padding:"10px 16px",minWidth:150}},
             React.createElement("div",{style:{fontSize:11,fontWeight:700,color:colors[est][1]}},est),
             React.createElement("div",{style:{fontSize:18,fontWeight:800,color:colors[est][1]}},rows.length+" facturas"),
@@ -1187,7 +1187,7 @@ var FacturacionView=function(xFCProps){
         React.createElement("span",{style:{fontSize:12,fontWeight:700,color:"#374151"}},"🔍 Filtros:"),
         React.createElement("select",{value:xFMesR,onChange:function(e){xSetFMesR(e.target.value);},style:xSel},React.createElement("option",{value:""},"Todos los meses"),xMesesR.map(function(m){return React.createElement("option",{key:m,value:m},m);})),
         React.createElement("select",{value:xFColabR,onChange:function(e){xSetFColabR(e.target.value);},style:{...xSel,maxWidth:200}},React.createElement("option",{value:""},"Todos los colaboradores"),xColabsR.map(function(c){return React.createElement("option",{key:c,value:c},c);})),
-        React.createElement("select",{value:xFEstadoR,onChange:function(e){xSetFEstadoR(e.target.value);},style:xSel},React.createElement("option",{value:""},"Todos los estados"),["NO","SI"].map(function(s){return React.createElement("option",{key:s,value:s},s==="SI"?"PAGADO":"PENDIENTE");})),
+        React.createElement("select",{value:xFEstadoR,onChange:function(e){xSetFEstadoR(e.target.value);},style:xSel},React.createElement("option",{value:""},"Todos los estados"),[{v:"",l:"Todos los estados"},{v:"NO",l:"Pendiente"},{v:"SI",l:"Pagado"}].map(function(s){return React.createElement("option",{key:s.v,value:s.v},s.l);})),
         React.createElement("button",{onClick:function(){xSetFMesR("");xSetFColabR("");xSetFEstadoR("");},style:{background:"#F3F4F6",border:"none",borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:12}},"Limpiar"),
         React.createElement("span",{style:{fontSize:11,color:"#9CA3AF"}},xFR.length+" registros")
       ),
