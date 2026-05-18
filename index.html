@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <title>Portal Colaborativo — Xperts IT v159b</title>
+  <title>Portal Colaborativo — Xperts IT v160</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#F4F2FB;}
 @media print {
@@ -885,7 +885,16 @@ var FacturacionView=function(xFCProps){
     var xApplyOverrides=function(rows,storKey){
       try{
         var ov=JSON.parse(sessionStorage.getItem(storKey)||"{}");
-        return rows.map(function(r){var k=String(r.id||"");return ov[k]?Object.assign({},r,ov[k]):r;});
+        if(Object.keys(ov).length===0)return rows;
+        return rows.map(function(r){
+          var k=String(r.id||"");
+          // Si no hay id, usar clave compuesta
+          var kComp=(r.colaborador!=null)
+            ?(r.colaborador+"|"+r.anio+"|"+r.mes)
+            :((r.nro_factura||"")+("|")+(r.cliente||"")+("|")+(r.anio||"")+("|")+(r.mes||""));
+          var override=ov[k]||ov[kComp];
+          return override?Object.assign({},r,override):r;
+        });
       }catch(e){return rows;}
     };
     // Mostrar caché inmediatamente si existe — apertura instantánea
@@ -1085,9 +1094,13 @@ var FacturacionView=function(xFCProps){
     var xMesAnterior=xMesData.length>1?xMesData[xMesData.length-2]:null;
 
     // Top clientes (todos los períodos — útil para ver quiénes son los clientes)
-    // Clientes y colaboradores filtrados al mes actual
+    // Clientes: último mes con facturas emitidas
     var xEmRowsMesAct=xMesActual?xEmitidas.filter(function(r){return String(r.anio||"").trim()===xMesActual.anio&&String(r.mes||"").trim().toLowerCase()===xMesActual.mesNom;}):[];
-    var xRecRowsMesAct=xMesActual?xRecibidas.filter(function(r){return String(r.anio||"").trim()===xMesActual.anio&&String(r.mes||"").trim().toLowerCase()===xMesActual.mesNom&&xNum(r.total_pagar)>0;}):[];
+
+    // Colaboradores: último mes con datos reales de honorarios (puede ser distinto al mes actual de emitidas)
+    var xMesDataConRecibidas=xMesData.filter(function(m){return m.sueldos>0;});
+    var xMesActualRecib=xMesDataConRecibidas.length>0?xMesDataConRecibidas[xMesDataConRecibidas.length-1]:xMesActual;
+    var xRecRowsMesAct=xMesActualRecib?xRecibidas.filter(function(r){return String(r.anio||"").trim()===xMesActualRecib.anio&&String(r.mes||"").trim().toLowerCase()===xMesActualRecib.mesNom&&xNum(r.total_pagar)>0;}):[];
 
     var xClientMap={};
     xEmRowsMesAct.forEach(function(r){var c=r.cliente||"Sin cliente";if(!xClientMap[c])xClientMap[c]={total:0,cobrado:0,pendiente:0,facturas:0};var t=xNumT(r);xClientMap[c].total+=t;xClientMap[c].facturas++;if(r.pago==="PAGADA")xClientMap[c].cobrado+=t;else if(r.pago!=="ANULADA")xClientMap[c].pendiente+=t;});
@@ -1230,7 +1243,7 @@ var FacturacionView=function(xFCProps){
           xTopClients.map(function(e){return xHBar(e[0],e[1].total,xTopClients[0][1].total,"#7C3AED",e[1].facturas+" fact.");})
         )),
         xCard(React.createElement("div",null,
-          xSH("👤","Costo por colaborador","ARS · "+( xMesActual?xMesActual.mesLabel:"mes actual")),
+          xSH("👤","Costo por colaborador","ARS · "+(xMesActualRecib?xMesActualRecib.mesLabel:"sin datos")),
           xTopColabs.map(function(e){
             return React.createElement("div",{key:e[0]},
               xHBar(e[0],e[1].total,xTopColabs[0][1].total,"#6B7280",
@@ -1330,7 +1343,7 @@ var FacturacionView=function(xFCProps){
                 xTD((row.anio||"-")+(row.mes?" "+row.mes:"")),xTD(row.cliente||"-"),xTD(row.concepto||"-"),xTD(row.nro_factura||"-"),
                 xTD(xFmt(row.base_imponible),"right"),xTD(xFmt(row.monto),"right"),
                 xTD(xTotalCIVA?xFmt(xTotalCIVA):"-","right","#F5F3FF"),
-                xTD(row.cuit||"-"),xTD(React.createElement("select",{value:row.pago||"PENDIENTE",onChange:function(e){var newVal=e.target.value;xSetEmitidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,pago:newVal}:r2;});});xSaveField("facturas_emitidas",row.id,"pago",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.pago==="PAGADA"?"#D1FAE5":row.pago==="ENVIADA"?"#DBEAFE":row.pago==="ANULADA"?"#F3F4F6":"#FEF3C7",color:row.pago==="PAGADA"?"#065F46":row.pago==="ENVIADA"?"#1D4ED8":row.pago==="ANULADA"?"#374151":"#92400E"}},React.createElement("option",{value:"PENDIENTE"},"PENDIENTE"),React.createElement("option",{value:"ENVIADA"},"ENVIADA"),React.createElement("option",{value:"PAGADA"},"PAGADA"),React.createElement("option",{value:"ANULADA"},"ANULADA"))),xTD(React.createElement("input",{type:"text",defaultValue:row.notas||"",onBlur:function(e){var newVal=e.target.value;xSetEmitidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,notas:newVal}:r2;});});xSaveField("facturas_emitidas",row.id,"notas",newVal);},style:{border:"none",borderBottom:"1px solid transparent",background:"transparent",fontSize:11,padding:"2px 4px",width:"100%",minWidth:160,outline:"none",fontFamily:"inherit"},onFocus:function(e){e.target.style.borderBottomColor="#7C3AED";e.target.style.background="#F5F3FF";}}))
+                xTD(row.cuit||"-"),xTD(React.createElement("select",{value:row.pago||"PENDIENTE",onChange:function(e){var newVal=e.target.value;xSetEmitidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,pago:newVal}:r2;});});xSaveField("facturas_emitidas",row.id||(row.nro_factura+"|"+row.cliente+"|"+row.anio+"|"+row.mes),"pago",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.pago==="PAGADA"?"#D1FAE5":row.pago==="ENVIADA"?"#DBEAFE":row.pago==="ANULADA"?"#F3F4F6":"#FEF3C7",color:row.pago==="PAGADA"?"#065F46":row.pago==="ENVIADA"?"#1D4ED8":row.pago==="ANULADA"?"#374151":"#92400E"}},React.createElement("option",{value:"PENDIENTE"},"PENDIENTE"),React.createElement("option",{value:"ENVIADA"},"ENVIADA"),React.createElement("option",{value:"PAGADA"},"PAGADA"),React.createElement("option",{value:"ANULADA"},"ANULADA"))),xTD(React.createElement("input",{type:"text",defaultValue:row.notas||"",onBlur:function(e){var newVal=e.target.value;xSetEmitidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,notas:newVal}:r2;});});xSaveField("facturas_emitidas",row.id||(row.nro_factura+"|"+row.cliente+"|"+row.anio+"|"+row.mes),"notas",newVal);},style:{border:"none",borderBottom:"1px solid transparent",background:"transparent",fontSize:11,padding:"2px 4px",width:"100%",minWidth:160,outline:"none",fontFamily:"inherit"},onFocus:function(e){e.target.style.borderBottomColor="#7C3AED";e.target.style.background="#F5F3FF";}}))
               );
             }),
             React.createElement("tr",{style:{background:"#F5F3FF",fontWeight:800}},
@@ -1388,8 +1401,8 @@ var FacturacionView=function(xFCProps){
                 xTD(xFmt(row.aumento),"right"),xTD(xFmt(row.honorarios_actuales),"right","#ECFDF5"),
                 xTD(xFmt(row.horas_extra_50),"right"),xTD(xFmt(row.horas_extra_100),"right"),
                 xTD(xFmt(row.iva),"right"),xTD(xFmt(row.total_pagar),"right","#F5F3FF"),
-                xTD(React.createElement("select",{value:row.pagado||"NO",onChange:function(e){var newVal=e.target.value;xSetRecibidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,pagado:newVal}:r2;});});xSaveField("facturas_recibidas",row.id,"pagado",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.pagado==="SI"?"#D1FAE5":row.pagado==="PENDIENTE"?"#DBEAFE":"#FEF3C7",color:row.pagado==="SI"?"#065F46":row.pagado==="PENDIENTE"?"#1D4ED8":"#92400E"}},React.createElement("option",{value:"NO"},"PENDIENTE"),React.createElement("option",{value:"PENDIENTE"},"EN PROCESO"),React.createElement("option",{value:"SI"},"PAGADA"))),
-                xTD(React.createElement("select",{value:row.factura_recibida||"NO",onChange:function(e){var newVal=e.target.value;xSetRecibidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,factura_recibida:newVal}:r2;});});xSaveField("facturas_recibidas",row.id,"factura_recibida",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.factura_recibida==="SI"?"#D1FAE5":"#FEF3C7",color:row.factura_recibida==="SI"?"#065F46":"#92400E"}},React.createElement("option",{value:"NO"},"NO"),React.createElement("option",{value:"SI"},"SI"))),xTD(row.alias||"-"),xTD(React.createElement("input",{type:"text",defaultValue:row.notas||"",onBlur:function(e){var newVal=e.target.value;xSetRecibidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,notas:newVal}:r2;});});xSaveField("facturas_recibidas",row.id,"notas",newVal);},style:{border:"none",borderBottom:"1px solid transparent",background:"transparent",fontSize:11,padding:"2px 4px",width:"100%",minWidth:160,outline:"none",fontFamily:"inherit"},onFocus:function(e){e.target.style.borderBottomColor="#7C3AED";e.target.style.background="#F5F3FF";}}))
+                xTD(React.createElement("select",{value:row.pagado||"NO",onChange:function(e){var newVal=e.target.value;xSetRecibidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,pagado:newVal}:r2;});});xSaveField("facturas_recibidas",row.id||(row.colaborador+"|"+row.anio+"|"+row.mes),"pagado",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.pagado==="SI"?"#D1FAE5":row.pagado==="PENDIENTE"?"#DBEAFE":"#FEF3C7",color:row.pagado==="SI"?"#065F46":row.pagado==="PENDIENTE"?"#1D4ED8":"#92400E"}},React.createElement("option",{value:"NO"},"PENDIENTE"),React.createElement("option",{value:"PENDIENTE"},"EN PROCESO"),React.createElement("option",{value:"SI"},"PAGADA"))),
+                xTD(React.createElement("select",{value:row.factura_recibida||"NO",onChange:function(e){var newVal=e.target.value;xSetRecibidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,factura_recibida:newVal}:r2;});});xSaveField("facturas_recibidas",row.id||(row.colaborador+"|"+row.anio+"|"+row.mes),"factura_recibida",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.factura_recibida==="SI"?"#D1FAE5":"#FEF3C7",color:row.factura_recibida==="SI"?"#065F46":"#92400E"}},React.createElement("option",{value:"NO"},"NO"),React.createElement("option",{value:"SI"},"SI"))),xTD(row.alias||"-"),xTD(React.createElement("input",{type:"text",defaultValue:row.notas||"",onBlur:function(e){var newVal=e.target.value;xSetRecibidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,notas:newVal}:r2;});});xSaveField("facturas_recibidas",row.id||(row.colaborador+"|"+row.anio+"|"+row.mes),"notas",newVal);},style:{border:"none",borderBottom:"1px solid transparent",background:"transparent",fontSize:11,padding:"2px 4px",width:"100%",minWidth:160,outline:"none",fontFamily:"inherit"},onFocus:function(e){e.target.style.borderBottomColor="#7C3AED";e.target.style.background="#F5F3FF";}}))
               );
             }),
             React.createElement("tr",{style:{background:"#F5F3FF",fontWeight:800}},
