@@ -6,9 +6,11 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <title>Portal Colaborativo — Xperts IT v160</title>
+  <title>Portal Colaborativo — Xperts IT v161</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#F4F2FB;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.7}}
+@keyframes fadein{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 @media print {
   body > * { display: none !important; }
   #xperts-print-area { display: block !important; }
@@ -875,6 +877,8 @@ var FacturacionView=function(xFCProps){
   var [xFMesR,xSetFMesR]=useState(xCurMes);
   var [xFColabR,xSetFColabR]=useState("");
   var [xFEstadoR,xSetFEstadoR]=useState("");
+  var [xPending,xSetPending]=useState({});   // {sheet_rowKey_field: {sheet,id,field,val}}
+  var [xToast,xSetToast]=useState(null);     // {msg, ok}
 
   var [xLoadedE,xSetLoadedE]=useState(false);
   var [xLoadedR,xSetLoadedR]=useState(false);
@@ -976,19 +980,40 @@ var FacturacionView=function(xFCProps){
   var xFmtDate=function(v){if(!v||v==="-")return"-";var s=String(v);var m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return s;};
 
   var xSaveField=function(sheet,id,field,val){
-    // Persistir en sessionStorage inmediatamente (sobrevive recarga del módulo)
+    var rowKey=String(id||"");
+    // 1. Guardar en sessionStorage inmediatamente
     try{
       var storKey="xperts_"+(sheet==="facturas_emitidas"?"emit":"recib")+"_overrides";
       var overrides=JSON.parse(sessionStorage.getItem(storKey)||"{}");
-      var rowKey=String(id||"");
       if(rowKey){
         if(!overrides[rowKey])overrides[rowKey]={};
         overrides[rowKey][field]=val;
         sessionStorage.setItem(storKey,JSON.stringify(overrides));
       }
     }catch(e){}
-    // Enviar al GAS en background
-    try{fetch(xFCGas,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},body:JSON.stringify({action:"update",sheet:sheet,id:String(id||""),data:{[field]:val}})});}catch(e){}
+    // 2. Agregar a cambios pendientes para el botón Guardar
+    if(rowKey){
+      xSetPending(function(prev){
+        var key=sheet+"|"+rowKey+"|"+field;
+        var next=Object.assign({},prev);
+        next[key]={sheet:sheet,id:rowKey,field:field,val:val};
+        return next;
+      });
+    }
+  };
+  var xFlushSave=function(){
+    var changes=Object.values(xPending);
+    if(changes.length===0)return;
+    var batches=changes.map(function(c){
+      return fetch(xFCGas,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},
+        body:JSON.stringify({action:"update",sheet:c.sheet,id:String(c.id),data:{[c.field]:c.val}})
+      }).catch(function(){return null;});
+    });
+    Promise.all(batches).then(function(){
+      xSetPending({});
+      xSetToast({msg:"✅ Cambios guardados en Sheets",ok:true});
+      setTimeout(function(){xSetToast(null);},3000);
+    });
   };
   var xPrintPDF=function(contentId,title){
     var printWin=window.open("","_blank","width=1100,height=800");
@@ -1431,6 +1456,8 @@ var FacturacionView=function(xFCProps){
   };
 
   return React.createElement("div",{style:{padding:"0 0 40px"}},
+    // Toast notification
+    xToast&&React.createElement("div",{style:{position:"fixed",top:20,right:20,zIndex:9999,background:xToast.ok?"#059669":"#DC2626",color:"#fff",padding:"12px 20px",borderRadius:10,fontSize:13,fontWeight:700,boxShadow:"0 4px 12px rgba(0,0,0,0.15)",animation:"fadein 0.2s"}},xToast.msg),
     React.createElement("div",{style:{marginBottom:16}},
       React.createElement("h2",{style:{color:"#111827",fontSize:20,fontWeight:800,margin:"0 0 2px"}},"💳 Facturación"),
       React.createElement("p",{style:{color:"#9CA3AF",margin:0,fontSize:12}},"Los cálculos se gestionan en Google Sheets. Hacé Sync para actualizar.")
@@ -1461,7 +1488,12 @@ var FacturacionView=function(xFCProps){
           });
         },
         style:{background:"#F0FDF4",border:"1px solid #BBF7D0",borderRadius:8,padding:"7px 12px",cursor:"pointer",fontSize:11,fontWeight:700,color:"#059669",display:"flex",alignItems:"center",gap:5}
-      },"🔄 Actualizar datos")
+      },"🔄 Actualizar datos"),
+      // Botón guardar cambios pendientes
+      Object.keys(xPending).length>0&&React.createElement("button",{
+        onClick:xFlushSave,
+        style:{background:"#7C3AED",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:6,animation:"pulse 1.5s infinite"}
+      },"💾 Guardar "+Object.keys(xPending).length+" cambio"+(Object.keys(xPending).length===1?"":"s"))
     ),
     xLoading?React.createElement("div",{style:{textAlign:"center",padding:60,color:"#9CA3AF",fontSize:14}},"⏳ Cargando datos del Sheets..."):
     xTab==="emitidas"?xEmitTable():
