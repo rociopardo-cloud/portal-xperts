@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <title>Portal Colaborativo — Xperts IT v157</title>
+  <title>Portal Colaborativo — Xperts IT v158</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#F4F2FB;}
 @media print {
@@ -988,18 +988,29 @@ var FacturacionView=function(xFCProps){
 
   // ── DASHBOARD ──────────────────────────────────────────────────────────
   var xDashboard=function(){
+    // ── HELPERS DE ORDEN Y FORMATO ─────────────────────────────────────────
     var xMO={"enero":1,"febrero":2,"marzo":3,"abril":4,"mayo":5,"junio":6,"julio":7,"agosto":8,"septiembre":9,"octubre":10,"noviembre":11,"diciembre":12};
     var xSortMes=function(a,b){var pa=a.split(" "),pb=b.split(" ");var ya=parseInt(pa[0]||0),yb=parseInt(pb[0]||0);if(ya!==yb)return ya-yb;return (xMO[(pa[1]||"").toLowerCase()]||0)-(xMO[(pb[1]||"").toLowerCase()]||0);};
-    var xPeriodos=[...new Set([...xEmitidas.map(function(r){return((r.anio||"")+" "+(r.mes||"")).trim().toLowerCase();}),
+    // Formato completo sin abreviar: $2.000.000
+    var xFmtFull=function(n){return"$"+Math.round(n).toLocaleString("es-AR");};
+    // Para barras SVG, abreviado solo en etiquetas de eje (ya que no caben los números completos)
+    var xFmtEje=function(n){if(n>=1000000)return Math.round(n/1000000)+"M";if(n>=1000)return Math.round(n/1000)+"K";return Math.round(n).toString();};
+
+    // ── PREPARACIÓN DE DATOS ───────────────────────────────────────────────
+    var xPeriodos=[...new Set([
+      ...xEmitidas.map(function(r){return((r.anio||"")+" "+(r.mes||"")).trim().toLowerCase();}),
       ...xRecibidas.map(function(r){return((r.anio||"")+" "+(r.mes||"")).trim().toLowerCase();})
     ])].filter(function(p){return p&&p.trim()!==""&&p.trim()!==" ";}).sort(xSortMes);
+
     var xMesData=xPeriodos.map(function(mes){
       var parts=mes.split(" ");var anio=parts[0];var mesNom=(parts[1]||"").toLowerCase();
       var emRows=xEmitidas.filter(function(r){return String(r.anio||"").trim()===anio&&String(r.mes||"").trim().toLowerCase()===mesNom;});
       var recRows=xRecibidas.filter(function(r){return String(r.anio||"").trim()===anio&&String(r.mes||"").trim().toLowerCase()===mesNom;});
       var facturado=emRows.reduce(function(s,r){return s+xNumT(r);},0);
-      var cobrado=emRows.filter(function(r){return r.pago==="PAGADO";}).reduce(function(s,r){return s+xNumT(r);},0);
-      var pendienteCobro=emRows.filter(function(r){return r.pago!=="PAGADO"&&r.pago!=="ANULADA";}).reduce(function(s,r){return s+xNumT(r);},0);
+      // "Cobrado" = facturas con estado PAGADA (ya cobradas)
+      var cobrado=emRows.filter(function(r){return r.pago==="PAGADA";}).reduce(function(s,r){return s+xNumT(r);},0);
+      // "Pendiente de cobro" = facturado pero no cobrado ni anulado
+      var pendienteCobro=emRows.filter(function(r){return r.pago!=="PAGADA"&&r.pago!=="ANULADA";}).reduce(function(s,r){return s+xNumT(r);},0);
       var sueldos=recRows.reduce(function(s,r){return s+xNum(r.total_pagar);},0);
       var sueldosPagados=recRows.filter(function(r){return r.pagado==="SI";}).reduce(function(s,r){return s+xNum(r.total_pagar);},0);
       var rent=facturado-sueldos;
@@ -1009,114 +1020,219 @@ var FacturacionView=function(xFCProps){
         facturado:facturado,cobrado:cobrado,pendienteCobro:pendienteCobro,
         sueldos:sueldos,sueldosPagados:sueldosPagados,rent:rent,mg:mg,
         facturas:emRows.length,
-        pendientes:emRows.filter(function(r){return r.pago!=="PAGADO"&&r.pago!=="ANULADA";}).length
+        pendientes:emRows.filter(function(r){return r.pago!=="PAGADA"&&r.pago!=="ANULADA";}).length,
+        anuladas:emRows.filter(function(r){return r.pago==="ANULADA";}).length
       };
     }).filter(function(d){return d.facturado>0||d.sueldos>0;});
+
+    // Últimos 6 meses (o todos si hay menos)
     var xRecientes=xMesData.slice(-6);
-    var xTotalFact=xEmitidas.reduce(function(s,r){return s+xNumT(r);},0);
-    var xTotalCobrado=xEmitidas.filter(function(r){return r.pago==="PAGADO";}).reduce(function(s,r){return s+xNumT(r);},0);
-    var xTotalPend=xEmitidas.filter(function(r){return r.pago!=="PAGADO"&&r.pago!=="ANULADA";}).reduce(function(s,r){return s+xNumT(r);},0);
-    var xTotalSueldos=xRecibidas.reduce(function(s,r){return s+xNum(r.total_pagar);},0);
-    var xTotalSueldosPend=xRecibidas.filter(function(r){return r.pagado!=="SI";}).reduce(function(s,r){return s+xNum(r.total_pagar);},0);
-    var xRentTotal=xTotalFact-xTotalSueldos;
-    var xMargenTotal=xTotalFact>0?Math.round((xRentTotal/xTotalFact)*100):0;
+    // Mes actual = último período con datos
+    var xMesActual=xMesData.length>0?xMesData[xMesData.length-1]:null;
+    var xMesAnterior=xMesData.length>1?xMesData[xMesData.length-2]:null;
+
+    // Top clientes (todos los períodos — útil para ver quiénes son los clientes)
     var xClientMap={};
-    xEmitidas.forEach(function(r){var c=r.cliente||"Sin cliente";if(!xClientMap[c])xClientMap[c]={total:0,cobrado:0,pendiente:0,facturas:0};var t=xNumT(r);xClientMap[c].total+=t;xClientMap[c].facturas++;if(r.pago==="PAGADO")xClientMap[c].cobrado+=t;else if(r.pago!=="ANULADA")xClientMap[c].pendiente+=t;});
+    xEmitidas.forEach(function(r){var c=r.cliente||"Sin cliente";if(!xClientMap[c])xClientMap[c]={total:0,cobrado:0,pendiente:0,facturas:0};var t=xNumT(r);xClientMap[c].total+=t;xClientMap[c].facturas++;if(r.pago==="PAGADA")xClientMap[c].cobrado+=t;else if(r.pago!=="ANULADA")xClientMap[c].pendiente+=t;});
     var xTopClients=Object.entries(xClientMap).sort(function(a,b){return b[1].total-a[1].total;}).slice(0,8);
+
     var xColabMap={};
     xRecibidas.filter(function(r){return xNum(r.total_pagar)>0;}).forEach(function(r){var c=r.colaborador||"Sin nombre";if(!xColabMap[c])xColabMap[c]={total:0,pagado:0,pendiente:0};var t=xNum(r.total_pagar);xColabMap[c].total+=t;if(r.pagado==="SI")xColabMap[c].pagado+=t;else xColabMap[c].pendiente+=t;});
     var xTopColabs=Object.entries(xColabMap).sort(function(a,b){return b[1].total-a[1].total;}).slice(0,8);
-    var xFmtM=function(n){if(n>=1000000000)return "$"+Math.round(n/1000000)+"M";if(n>=1000000)return "$"+Math.round(n/1000)+"K";if(n>=1000)return "$"+Math.round(n/1000)+"K";return "$"+Math.round(n).toLocaleString("es-AR");};
-    var xFmtFull=function(n){return"$"+Math.round(n).toLocaleString("es-AR");};
-    var xUltimoMes=xRecientes.length>0?xRecientes[xRecientes.length-1]:null;
-    var xAnteriorMes=xRecientes.length>1?xRecientes[xRecientes.length-2]:null;
-    var xTrendFact=xUltimoMes&&xAnteriorMes&&xAnteriorMes.facturado>0?Math.round(((xUltimoMes.facturado-xAnteriorMes.facturado)/xAnteriorMes.facturado)*100):undefined;
 
-    var xKPI=function(icon,label,value,sub,color,trend){return React.createElement("div",{style:{background:"#fff",borderRadius:14,padding:"18px 20px",border:"1px solid #E5E7EB",position:"relative",overflow:"hidden"}},React.createElement("div",{style:{position:"absolute",top:0,left:0,right:0,height:3,background:color||"#7C3AED",borderRadius:"14px 14px 0 0"}}),React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},React.createElement("div",null,React.createElement("div",{style:{fontSize:10,color:"#6B7280",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:6}},icon+" "+label),React.createElement("div",{style:{fontSize:21,fontWeight:800,color:"#111827",lineHeight:1}},value),sub&&React.createElement("div",{style:{fontSize:11,color:"#9CA3AF",marginTop:5}},sub)),trend!==undefined&&React.createElement("div",{style:{background:trend>=0?"#D1FAE5":"#FEE2E2",color:trend>=0?"#065F46":"#991B1B",borderRadius:8,padding:"3px 8px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}},(trend>=0?"▲ ":"▼ ")+Math.abs(trend)+"%")));};
+    // ── COMPONENTES ────────────────────────────────────────────────────────
+    var xKPI=function(icon,label,value,sub,color,badge){
+      return React.createElement("div",{style:{background:"#fff",borderRadius:14,padding:"18px 20px",border:"1px solid #E5E7EB",position:"relative",overflow:"hidden"}},
+        React.createElement("div",{style:{position:"absolute",top:0,left:0,right:0,height:3,background:color||"#7C3AED"}}),
+        React.createElement("div",{style:{fontSize:10,color:"#6B7280",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8}},icon+" "+label),
+        React.createElement("div",{style:{fontSize:17,fontWeight:800,color:"#111827",lineHeight:1.1,wordBreak:"break-all"}},value),
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}},
+          sub&&React.createElement("div",{style:{fontSize:11,color:"#9CA3AF"}},sub),
+          badge&&React.createElement("div",{style:{background:badge.bg,color:badge.color,borderRadius:8,padding:"2px 8px",fontSize:10,fontWeight:700}},badge.text)
+        )
+      );
+    };
+
     var xCard=function(children,extra){return React.createElement("div",{style:Object.assign({background:"#fff",borderRadius:14,border:"1px solid #E5E7EB",padding:"18px 20px"},extra||{})},children);};
     var xSH=function(icon,title,sub){return React.createElement("div",{style:{marginBottom:14}},React.createElement("div",{style:{fontSize:13,fontWeight:800,color:"#111827"}},icon+" "+title),sub&&React.createElement("div",{style:{fontSize:11,color:"#9CA3AF",marginTop:2}},sub));};
-    var xHBar=function(label,val,max,fill,sub){var pct=max>0?Math.min(100,Math.round((val/max)*100)):0;return React.createElement("div",{style:{marginBottom:11}},React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}},React.createElement("span",{style:{fontSize:11,color:"#374151",fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:190}},label),React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},sub&&React.createElement("span",{style:{fontSize:10,color:"#9CA3AF"}},sub),React.createElement("span",{style:{fontSize:12,fontWeight:800,color:fill,minWidth:60,textAlign:"right"}},xFmtM(val)))),React.createElement("div",{style:{background:"#F3F4F6",borderRadius:6,height:7,width:"100%"}},React.createElement("div",{style:{background:fill,borderRadius:6,height:7,width:pct+"%"}})));};
+    var xLbl=function(txt){return React.createElement("div",{style:{fontSize:11,color:"#9CA3AF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}},txt);};
 
-    var xSVGBars=function(data,H){H=H||180;var W=620,PT=12,PB=28,PL=4,PR=4,innerH=H-PT-PB;var maxVal=Math.max.apply(null,data.map(function(d){return Math.max.apply(null,d.bars.map(function(b){return b.val||0;}));}).concat([1]));var slotW=(W-PL-PR)/Math.max(data.length,1);var bw=Math.max(6,Math.floor(slotW/data[0].bars.length)-4);return React.createElement("svg",{viewBox:"0 0 "+W+" "+H,style:{width:"100%",height:H}},
-      [0.25,0.5,0.75,1].map(function(pct,gi){var y=PT+innerH*(1-pct);return React.createElement("g",{key:gi},React.createElement("line",{x1:PL,y1:y,x2:W-PR,y2:y,stroke:"#F3F4F6",strokeWidth:1}),React.createElement("text",{x:PL+2,y:y-3,fontSize:8,fill:"#D1D5DB"},xFmtM(maxVal*pct).replace("$","")));}),
-      data.map(function(d,di){var slotX=PL+di*slotW;var bars=d.bars.filter(function(b){return b.val>0;});var totalW=bars.length*(bw+3);return React.createElement("g",{key:di},bars.map(function(b,bi){var h=maxVal>0?Math.max(2,Math.round((b.val/maxVal)*innerH)):2;var bx=slotX+(slotW-totalW)/2+bi*(bw+3);var by=PT+innerH-h;return React.createElement("rect",{key:bi,x:bx,y:by,width:bw,height:h,rx:3,fill:b.color,opacity:0.9},React.createElement("title",null,d.label+": "+b.name+" "+xFmtFull(b.val)));}),React.createElement("text",{x:slotX+slotW/2,y:H-4,fontSize:8,fill:"#9CA3AF",textAnchor:"middle"},d.label));})
-    );};
+    var xHBar=function(label,val,max,fill,sub){var pct=max>0?Math.min(100,Math.round((val/max)*100)):0;
+      return React.createElement("div",{style:{marginBottom:11}},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}},
+          React.createElement("span",{style:{fontSize:11,color:"#374151",fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:190}},label),
+          React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},
+            sub&&React.createElement("span",{style:{fontSize:10,color:"#9CA3AF"}},sub),
+            React.createElement("span",{style:{fontSize:11,fontWeight:800,color:fill,minWidth:80,textAlign:"right"}},xFmtFull(val))
+          )
+        ),
+        React.createElement("div",{style:{background:"#F3F4F6",borderRadius:6,height:7,width:"100%"}},
+          React.createElement("div",{style:{background:fill,borderRadius:6,height:7,width:pct+"%"}}))
+      );
+    };
 
+    // SVG bar chart — eje Y usa abreviado, tooltip usa completo
+    var xSVGBars=function(data,H){H=H||180;var W=640,PT=14,PB=30,PL=6,PR=6,innerH=H-PT-PB;
+      var maxVal=Math.max.apply(null,data.map(function(d){return Math.max.apply(null,d.bars.map(function(b){return b.val||0;}));}).concat([1]));
+      var slotW=(W-PL-PR)/Math.max(data.length,1);
+      var barsPerSlot=data.length>0?data[0].bars.length:1;
+      var bw=Math.max(6,Math.floor((slotW-8)/barsPerSlot)-3);
+      return React.createElement("svg",{viewBox:"0 0 "+W+" "+H,style:{width:"100%",height:H}},
+        [0.25,0.5,0.75,1].map(function(pct,gi){var y=PT+innerH*(1-pct);return React.createElement("g",{key:gi},
+          React.createElement("line",{x1:PL,y1:y,x2:W-PR,y2:y,stroke:"#F3F4F6",strokeWidth:1}),
+          React.createElement("text",{x:PL+2,y:y-3,fontSize:8,fill:"#D1D5DB"},xFmtEje(maxVal*pct)));}),
+        data.map(function(d,di){var slotX=PL+di*slotW;var bars=d.bars.filter(function(b){return b.val>0;});var totalW=bars.length*(bw+3);
+          return React.createElement("g",{key:di},
+            bars.map(function(b,bi){var h=maxVal>0?Math.max(2,Math.round((b.val/maxVal)*innerH)):2;var bx=slotX+(slotW-totalW)/2+bi*(bw+3);var by=PT+innerH-h;
+              return React.createElement("rect",{key:bi,x:bx,y:by,width:bw,height:h,rx:3,fill:b.color,opacity:0.9},React.createElement("title",null,d.label+"\n"+b.name+": "+xFmtFull(b.val)));}),
+            React.createElement("text",{x:slotX+slotW/2,y:H-4,fontSize:8,fill:"#9CA3AF",textAnchor:"middle"},d.label));})
+      );
+    };
+
+    // ── RENDER ─────────────────────────────────────────────────────────────
     return React.createElement("div",{id:"xprint-dashboard"},
+
+      // PDF button
       React.createElement("div",{style:{display:"flex",justifyContent:"flex-end",marginBottom:16},className:"no-print"},
         React.createElement("button",{onClick:function(){xPrintPDF("xprint-dashboard","Dashboard Financiero - Xperts IT");},style:{background:"#7C3AED",color:"#fff",border:"none",borderRadius:8,padding:"8px 16px",cursor:"pointer",fontSize:12,fontWeight:700}},"📄 Descargar PDF Dashboard")
       ),
 
-      React.createElement("div",{style:{fontSize:11,color:"#9CA3AF",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}},"📊 Resumen general · todos los períodos"),
-      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:24}},
-        xKPI("💰","Total Facturado",xFmtM(xTotalFact),xEmitidas.filter(function(r){return r.pago!=="ANULADA";}).length+" facturas","#7C3AED",xTrendFact),
-        xKPI("✅","Cobrado",xFmtM(xTotalCobrado),Math.round((xTotalCobrado/Math.max(xTotalFact,1))*100)+"% del total","#059669"),
-        xKPI("⏳","Por Cobrar",xFmtM(xTotalPend),xEmitidas.filter(function(r){return r.pago!=="PAGADO"&&r.pago!=="ANULADA";}).length+" pendientes","#D97706"),
-        xKPI("👥","Total Sueldos",xFmtM(xTotalSueldos),xRecibidas.filter(function(r){return xNum(r.total_pagar)>0;}).length+" liquidaciones","#6B7280"),
-        xKPI("💸","Sueldos Adeudados",xFmtM(xTotalSueldosPend),xRecibidas.filter(function(r){return r.pagado!=="SI"&&xNum(r.total_pagar)>0;}).length+" sin pagar","#DC2626"),
-        xKPI("📈","Rentabilidad Neta",xFmtM(xRentTotal),"Margen: "+xMargenTotal+"%",xRentTotal>=0?"#059669":"#DC2626")
-      ),
-
-      xUltimoMes&&React.createElement("div",{style:{marginBottom:24}},
-        React.createElement("div",{style:{fontSize:11,color:"#9CA3AF",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10}},"🗓️ Último período · "+xUltimoMes.mesLabel),
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}},
-          xKPI("💰","Facturado",xFmtM(xUltimoMes.facturado),xUltimoMes.facturas+" facturas emitidas","#7C3AED"),
-          xKPI("💵","Cobrado",xFmtM(xUltimoMes.cobrado),xFmtM(xUltimoMes.pendienteCobro)+" pendiente","#059669"),
-          xKPI("🏦","Sueldos",xFmtM(xUltimoMes.sueldos),xFmtM(xUltimoMes.sueldos-xUltimoMes.sueldosPagados)+" sin pagar","#6B7280"),
-          xKPI("📊","Rentabilidad",xFmtM(xUltimoMes.rent),"Margen "+xUltimoMes.mg+"%",xUltimoMes.rent>=0?"#059669":"#DC2626"),
-          xUltimoMes.pendientes>0&&xKPI("⚠️","Fact. Pendientes",xUltimoMes.pendientes+" fact.","Sin cobrar","#D97706")
+      // ── BLOQUE 1: MES ACTUAL ─────────────────────────────────────────────
+      xMesActual&&React.createElement("div",{style:{marginBottom:24}},
+        xLbl("📅 Período actual · "+xMesActual.mesLabel+" · ARS"),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:10}},
+          xKPI("💰","Facturado",xFmtFull(xMesActual.facturado),xMesActual.facturas+" facturas emitidas","#7C3AED"),
+          xKPI("✅","Cobrado",xFmtFull(xMesActual.cobrado),
+            xMesActual.cobrado>0?Math.round((xMesActual.cobrado/xMesActual.facturado)*100)+"% del facturado":"Sin cobros registrados",
+            "#059669",
+            xMesActual.cobrado>0?{bg:"#D1FAE5",color:"#065F46",text:"COBRADA"}:null
+          ),
+          xKPI("⏳","Pendiente de cobro",xFmtFull(xMesActual.pendienteCobro),
+            xMesActual.pendientes+" factura"+(xMesActual.pendientes!==1?"s":"")+" sin cobrar",
+            "#D97706",
+            xMesActual.pendientes>0?{bg:"#FEF3C7",color:"#92400E",text:"PENDIENTE"}:null
+          ),
+          xKPI("🏦","Sueldos / Honorarios",xFmtFull(xMesActual.sueldos),
+            xFmtFull(xMesActual.sueldos-xMesActual.sueldosPagados)+" sin pagar",
+            "#6B7280"
+          ),
+          xKPI("📈","Resultado neto",xFmtFull(xMesActual.rent),
+            "Margen: "+xMesActual.mg+"%",
+            xMesActual.rent>=0?"#059669":"#DC2626",
+            {bg:xMesActual.mg>=50?"#D1FAE5":xMesActual.mg>=25?"#FEF3C7":"#FEE2E2",color:xMesActual.mg>=50?"#065F46":xMesActual.mg>=25?"#92400E":"#991B1B",text:xMesActual.mg+"%"}
+          )
         )
       ),
 
+      // ── BLOQUE 2: EVOLUCIÓN ÚLTIMOS 6 MESES ─────────────────────────────
       xRecientes.length>0&&xCard(React.createElement("div",null,
-        xSH("📊","Evolución mensual · Facturación, Cobros y Sueldos","Últimos "+xRecientes.length+" meses · ARS"),
+        xSH("📊","Evolución mensual","Últimos "+xRecientes.length+" meses · Facturado, Cobrado y Sueldos · ARS"),
         React.createElement("div",{style:{display:"flex",gap:16,marginBottom:12,flexWrap:"wrap"}},
-          [{c:"#7C3AED",l:"Facturado"},{c:"#059669",l:"Cobrado"},{c:"#9CA3AF",l:"Sueldos"}].map(function(leg){return React.createElement("div",{key:leg.l,style:{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"#6B7280"}},React.createElement("div",{style:{width:11,height:11,borderRadius:3,background:leg.c}}),React.createElement("span",null,leg.l));})
+          [{c:"#7C3AED",l:"Facturado"},{c:"#059669",l:"Cobrado"},{c:"#9CA3AF",l:"Sueldos"}].map(function(leg){
+            return React.createElement("div",{key:leg.l,style:{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"#6B7280"}},
+              React.createElement("div",{style:{width:11,height:11,borderRadius:3,background:leg.c}}),leg.l);})
         ),
-        xSVGBars(xRecientes.map(function(d){return{label:d.mesLabel.split(" ")[0].substring(0,3)+"."+d.anio.slice(2),bars:[{name:"Facturado",val:d.facturado,color:"#7C3AED"},{name:"Cobrado",val:d.cobrado,color:"#059669"},{name:"Sueldos",val:d.sueldos,color:"#9CA3AF"}]};}),180)
+        xSVGBars(xRecientes.map(function(d){return{
+          label:d.mesLabel.split(" ")[0].substring(0,3)+". "+d.anio.slice(2),
+          bars:[{name:"Facturado",val:d.facturado,color:"#7C3AED"},{name:"Cobrado",val:d.cobrado,color:"#059669"},{name:"Sueldos",val:d.sueldos,color:"#9CA3AF"}]
+        };}),180)
       ),{marginBottom:16}),
 
+      // ── BLOQUE 3: RENTABILIDAD ───────────────────────────────────────────
       xRecientes.length>0&&xCard(React.createElement("div",null,
-        xSH("📈","Rentabilidad neta mes a mes","Resultado = Facturado − Sueldos · ARS · % indica margen"),
-        React.createElement("svg",{viewBox:"0 0 620 130",style:{width:"100%",height:130}},
-          (function(){var W=620,H=100,PT=8,PB=28;var maxR=Math.max.apply(null,xRecientes.map(function(d){return Math.abs(d.rent);}));maxR=maxR||1;
-            return xRecientes.map(function(d,i){var slotW=W/xRecientes.length;var bw=slotW-12;var isPos=d.rent>=0;var h=Math.max(3,Math.round((Math.abs(d.rent)/maxR)*(H-PT-PB)));var by=isPos?PT+(H-PT-PB)-h:PT+(H-PT-PB);var color=isPos?(d.mg>=50?"#059669":d.mg>=25?"#34D399":"#D97706"):"#DC2626";var bx=i*slotW+6;
-              return React.createElement("g",{key:i},React.createElement("rect",{x:bx,y:by,width:bw,height:h,rx:3,fill:color,opacity:0.9},React.createElement("title",null,d.mesLabel+": "+xFmtFull(d.rent)+" ("+d.mg+"%)")),React.createElement("text",{x:bx+bw/2,y:H-2,fontSize:8,fill:"#9CA3AF",textAnchor:"middle"},d.mesLabel.split(" ")[0].substring(0,3)+"."+d.anio.slice(2)),React.createElement("text",{x:bx+bw/2,y:isPos?by-3:by+h+9,fontSize:8,fontWeight:700,fill:color,textAnchor:"middle"},d.mg+"%"));});
+        xSH("📈","Rentabilidad neta mes a mes","Resultado = Facturado − Sueldos · % indica margen · ARS"),
+        React.createElement("svg",{viewBox:"0 0 640 130",style:{width:"100%",height:130}},
+          (function(){var W=640,H=100,PT=8,PB=28;
+            var maxR=Math.max.apply(null,xRecientes.map(function(d){return Math.abs(d.rent);}));maxR=maxR||1;
+            return xRecientes.map(function(d,i){
+              var slotW=W/xRecientes.length;var bw=slotW-12;
+              var isPos=d.rent>=0;var h=Math.max(3,Math.round((Math.abs(d.rent)/maxR)*(H-PT-PB)));
+              var by=isPos?PT+(H-PT-PB)-h:PT+(H-PT-PB);
+              var color=isPos?(d.mg>=50?"#059669":d.mg>=25?"#34D399":"#D97706"):"#DC2626";
+              var bx=i*slotW+6;
+              return React.createElement("g",{key:i},
+                React.createElement("rect",{x:bx,y:by,width:bw,height:h,rx:3,fill:color,opacity:0.9},
+                  React.createElement("title",null,d.mesLabel+"\nResultado: "+xFmtFull(d.rent)+"\nMargen: "+d.mg+"%")
+                ),
+                React.createElement("text",{x:bx+bw/2,y:H-2,fontSize:8,fill:"#9CA3AF",textAnchor:"middle"},
+                  d.mesLabel.split(" ")[0].substring(0,3)+". "+d.anio.slice(2)
+                ),
+                React.createElement("text",{x:bx+bw/2,y:isPos?by-3:by+h+9,fontSize:8,fontWeight:700,fill:color,textAnchor:"middle"},
+                  d.mg+"%"
+                )
+              );
+            });
           })()
         )
       ),{marginBottom:16}),
 
+      // ── BLOQUE 4: CLIENTES + COLABORADORES ───────────────────────────────
       React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}},
         xCard(React.createElement("div",null,
-          xSH("🏢","Facturación por cliente","Top "+xTopClients.length+" · ARS"),
+          xSH("🏢","Facturación por cliente","ARS · todos los períodos"),
           xTopClients.map(function(e){return xHBar(e[0],e[1].total,xTopClients[0][1].total,"#7C3AED",e[1].facturas+" fact.");})
         )),
         xCard(React.createElement("div",null,
-          xSH("👤","Costo por colaborador","Top "+xTopColabs.length+" · ARS"),
-          xTopColabs.map(function(e){return React.createElement("div",{key:e[0]},xHBar(e[0],e[1].total,xTopColabs[0][1].total,"#6B7280",e[1].pagado>0?"✓ "+xFmtM(e[1].pagado):undefined),e[1].pendiente>0&&React.createElement("div",{style:{fontSize:10,color:"#D97706",marginTop:-8,marginBottom:4}},"⏳ "+xFmtM(e[1].pendiente)+" pendiente"));})
+          xSH("👤","Costo por colaborador","ARS · todos los períodos"),
+          xTopColabs.map(function(e){
+            return React.createElement("div",{key:e[0]},
+              xHBar(e[0],e[1].total,xTopColabs[0][1].total,"#6B7280",
+                e[1].pagado>0?"✓ "+xFmtFull(e[1].pagado):undefined
+              ),
+              e[1].pendiente>0&&React.createElement("div",{style:{fontSize:10,color:"#D97706",marginTop:-7,marginBottom:4}},
+                "⏳ "+xFmtFull(e[1].pendiente)+" pendiente"
+              )
+            );
+          })
         ))
       ),
 
+      // ── BLOQUE 5: TABLA MES A MES COMPLETA ──────────────────────────────
       xMesData.length>0&&xCard(React.createElement("div",null,
-        xSH("📅","Detalle financiero mes a mes","Todos los períodos · orden cronológico · ARS"),
+        xSH("📅","Detalle financiero mes a mes","Orden cronológico · todos los períodos · ARS"),
         React.createElement("div",{style:{overflowX:"auto"}},
           React.createElement("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:11}},
-            React.createElement("thead",null,React.createElement("tr",null,
-              [["Período","left"],["Facturado","right"],["Cobrado","right"],["Por Cobrar","right"],["Sueldos","right"],["Resultado neto","right"],["Margen","center"],["Facturas","center"],["Pend.","center"]].map(function(col,ci){return React.createElement("th",{key:ci,style:{background:"#1F2937",color:"#fff",padding:"8px 10px",textAlign:col[1],fontSize:10,fontWeight:700,whiteSpace:"nowrap",borderBottom:"2px solid #7C3AED"}},col[0]);})
-            )),
+            React.createElement("thead",null,
+              React.createElement("tr",null,
+                [
+                  {l:"Período",a:"left"},
+                  {l:"Facturado",a:"right"},
+                  {l:"Cobrado",a:"right"},
+                  {l:"Pendiente de cobro",a:"right"},
+                  {l:"Sueldos",a:"right"},
+                  {l:"Resultado neto",a:"right"},
+                  {l:"Margen",a:"center"},
+                  {l:"Facturas",a:"center"},
+                  {l:"Sin cobrar",a:"center"}
+                ].map(function(col,ci){
+                  return React.createElement("th",{key:ci,style:{background:"#1F2937",color:"#fff",padding:"9px 10px",textAlign:col.a,fontSize:10,fontWeight:700,whiteSpace:"nowrap",borderBottom:"2px solid #7C3AED"}},col.l);
+                })
+              )
+            ),
             React.createElement("tbody",null,
               xMesData.map(function(m,i){
-                var isPos=m.rent>=0;var mgC=m.mg>=50?"#059669":m.mg>=25?"#D97706":"#DC2626";
-                return React.createElement("tr",{key:m.mes,style:{background:i%2===0?"#fff":"#F9FAFB"}},
-                  React.createElement("td",{style:{padding:"8px 10px",fontWeight:700,fontSize:12,color:"#111827",borderBottom:"1px solid #F3F4F6",whiteSpace:"nowrap"}},m.mesLabel),
+                var isPos=m.rent>=0;
+                var mgC=m.mg>=50?"#059669":m.mg>=25?"#D97706":"#DC2626";
+                var mgBg=m.mg>=50?"#D1FAE5":m.mg>=25?"#FEF3C7":"#FEE2E2";
+                var isActual=m===xMesActual;
+                return React.createElement("tr",{key:m.mes,style:{background:isActual?"#F5F3FF":i%2===0?"#fff":"#F9FAFB"}},
+                  React.createElement("td",{style:{padding:"8px 10px",fontWeight:isActual?800:600,fontSize:12,color:isActual?"#7C3AED":"#111827",whiteSpace:"nowrap",borderBottom:"1px solid #F3F4F6",borderLeft:isActual?"3px solid #7C3AED":"3px solid transparent"}},
+                    m.mesLabel+(isActual?" ◀ actual":"")
+                  ),
                   React.createElement("td",{style:{padding:"8px 10px",textAlign:"right",fontWeight:600,color:"#7C3AED",borderBottom:"1px solid #F3F4F6"}},xFmtFull(m.facturado)),
-                  React.createElement("td",{style:{padding:"8px 10px",textAlign:"right",color:"#059669",fontWeight:600,borderBottom:"1px solid #F3F4F6"}},m.cobrado>0?xFmtFull(m.cobrado):"—"),
-                  React.createElement("td",{style:{padding:"8px 10px",textAlign:"right",color:m.pendienteCobro>0?"#D97706":"#9CA3AF",borderBottom:"1px solid #F3F4F6"}},m.pendienteCobro>0?xFmtFull(m.pendienteCobro):"—"),
+                  React.createElement("td",{style:{padding:"8px 10px",textAlign:"right",color:"#059669",fontWeight:600,borderBottom:"1px solid #F3F4F6"}},m.cobrado>0?xFmtFull(m.cobrado):React.createElement("span",{style:{color:"#D1D5DB"}},"—")),
+                  React.createElement("td",{style:{padding:"8px 10px",textAlign:"right",color:m.pendienteCobro>0?"#D97706":"#9CA3AF",fontWeight:m.pendienteCobro>0?600:400,borderBottom:"1px solid #F3F4F6"}},m.pendienteCobro>0?xFmtFull(m.pendienteCobro):"—"),
                   React.createElement("td",{style:{padding:"8px 10px",textAlign:"right",color:"#374151",borderBottom:"1px solid #F3F4F6"}},m.sueldos>0?xFmtFull(m.sueldos):"—"),
                   React.createElement("td",{style:{padding:"8px 10px",textAlign:"right",fontWeight:800,color:isPos?"#059669":"#DC2626",background:isPos?"#F0FDF4":"#FEF2F2",borderBottom:"1px solid #F3F4F6"}},xFmtFull(m.rent)),
-                  React.createElement("td",{style:{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #F3F4F6"}},React.createElement("span",{style:{background:m.mg>=50?"#D1FAE5":m.mg>=25?"#FEF3C7":"#FEE2E2",color:mgC,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:800}},m.mg+"%")),
+                  React.createElement("td",{style:{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #F3F4F6"}},
+                    React.createElement("span",{style:{background:mgBg,color:mgC,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:800}},m.mg+"%")
+                  ),
                   React.createElement("td",{style:{padding:"8px 10px",textAlign:"center",color:"#374151",borderBottom:"1px solid #F3F4F6"}},m.facturas),
-                  React.createElement("td",{style:{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #F3F4F6"}},m.pendientes>0?React.createElement("span",{style:{background:"#FEF3C7",color:"#92400E",padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700}},m.pendientes):React.createElement("span",{style:{color:"#059669",fontSize:12}},"✓"))
+                  React.createElement("td",{style:{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #F3F4F6"}},
+                    m.pendientes>0
+                      ?React.createElement("span",{style:{background:"#FEF3C7",color:"#92400E",padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700}},m.pendientes)
+                      :React.createElement("span",{style:{color:"#059669",fontSize:13}},"✓")
+                  )
                 );
               })
             )
