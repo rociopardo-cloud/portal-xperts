@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <title>Portal Colaborativo — Xperts IT v166</title>
+  <title>Portal Colaborativo — Xperts IT v167</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#F4F2FB;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.7}}
@@ -152,17 +152,50 @@ function CRMViewInner(props) {
       return next;
     });
   }
-  // Load deals from Sheets on mount
+
+  // Guarda un comentario nuevo en la hoja "comments" del Sheets
+  var saveComment = function(comment) {
+    try {
+      fetch(APPS_URL, {method:"POST", mode:"no-cors", headers:{"Content-Type":"text/plain"},
+        body: JSON.stringify({action:"append", sheet:"comments",
+          data:[{dealId:String(comment.dealId), author:comment.author, date:comment.date, text:comment.text}]
+        })
+      });
+    } catch(e) {}
+  };
+
+  // Load deals + comments from Sheets on mount
   React.useEffect(function() {
-    // Background refresh - show cached data instantly, update silently
-    fetch(APPS_URL + "?sheet=deals").then(function(r){return r.json();})
-    .then(function(res){
-      if(res.ok && Array.isArray(res.data) && res.data.length > 0){
-        var parsed=res.data.map(function(d){return{...d,id:Number(d.id)||d.id,amount:Number(d.amount)||0,comments:Array.isArray(d.comments)?d.comments:[]};});
+    Promise.all([
+      fetch(APPS_URL + "?sheet=deals").then(function(r){return r.json();}).catch(function(){return null;}),
+      fetch(APPS_URL + "?sheet=comments").then(function(r){return r.json();}).catch(function(){return null;})
+    ]).then(function(results){
+      var dealsRes=results[0], commentsRes=results[1];
+      if(dealsRes && dealsRes.ok && Array.isArray(dealsRes.data) && dealsRes.data.length > 0){
+        // Build comments map grouped by dealId
+        var commentsMap={};
+        if(commentsRes && Array.isArray(commentsRes.data)){
+          commentsRes.data.forEach(function(c){
+            var key=String(c.dealId||c.dealid||"");
+            if(!key)return;
+            if(!commentsMap[key])commentsMap[key]=[];
+            commentsMap[key].push({
+              dealId:key,
+              author:c.author||"",
+              date:c.date||"",
+              text:c.text||""
+            });
+          });
+        }
+        var parsed=dealsRes.data.map(function(d){
+          var key=String(Number(d.id)||d.id);
+          return{...d,id:Number(d.id)||d.id,amount:Number(d.amount)||0,
+            comments:commentsMap[key]||[]};
+        });
         setDealsRaw(parsed);
         try{localStorage.setItem(LS_KEY,JSON.stringify(parsed));}catch(e){}
       }
-    }).catch(function(){});
+    });
   }, []);
 ;
 
@@ -370,8 +403,8 @@ function CRMViewInner(props) {
             ),
             // Add comment
             React.createElement("div",{style:{display:"flex",gap:8}},
-              React.createElement("input",{value:newComment,onChange:e=>setNewComment(e.target.value),onKeyDown:e=>{if(e.key==="Enter"&&newComment.trim()){var comment={dealId:d.id,author:currentUserName,date:new Date().toLocaleDateString("es-AR"),text:newComment.trim()};setDeals(prev=>prev.map(x=>String(x.id)===String(d.id)?{...x,comments:[...(x.comments||[]),comment]}:x));setNewComment("");}},placeholder:"Agregar comentario...",style:{flex:1,border:"1px solid #E5E7EB",borderRadius:8,padding:"7px 11px",fontSize:13,outline:"none",fontFamily:"inherit"}}),
-              React.createElement("button",{onClick:()=>{if(newComment.trim()){var comment={dealId:d.id,author:currentUserName,date:new Date().toLocaleDateString("es-AR"),text:newComment.trim()};setDeals(prev=>prev.map(x=>String(x.id)===String(d.id)?{...x,comments:[...(x.comments||[]),comment]}:x));setNewComment("");}},style:{background:"#7C3AED",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:13,fontWeight:700}},"Enviar")
+              React.createElement("input",{value:newComment,onChange:e=>setNewComment(e.target.value),onKeyDown:e=>{if(e.key==="Enter"&&newComment.trim()){var comment={dealId:d.id,author:currentUserName,date:new Date().toLocaleDateString("es-AR"),text:newComment.trim()};setDeals(prev=>prev.map(x=>String(x.id)===String(d.id)?{...x,comments:[...(x.comments||[]),comment]}:x));saveComment(comment);setNewComment("");}},placeholder:"Agregar comentario...",style:{flex:1,border:"1px solid #E5E7EB",borderRadius:8,padding:"7px 11px",fontSize:13,outline:"none",fontFamily:"inherit"}}),
+              React.createElement("button",{onClick:()=>{if(newComment.trim()){var comment={dealId:d.id,author:currentUserName,date:new Date().toLocaleDateString("es-AR"),text:newComment.trim()};setDeals(prev=>prev.map(x=>String(x.id)===String(d.id)?{...x,comments:[...(x.comments||[]),comment]}:x));saveComment(comment);setNewComment("");}},style:{background:"#7C3AED",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:13,fontWeight:700}},"Enviar")
             )
           )
         )
