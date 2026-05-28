@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <title>Portal Colaborativo — Xperts IT v163</title>
+  <title>Portal Colaborativo — Xperts IT v164</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>"/>
   <style>*{box-sizing:border-box;margin:0;padding:0;} body{background:#F4F2FB;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.7}}
@@ -903,16 +903,23 @@ var FacturacionView=function(xFCProps){
   React.useEffect(function(){
     var xApplyOverrides=function(rows,storKey){
       try{
+        // Fuente 1: sessionStorage overrides (cambios de esta sesión)
         var ov=JSON.parse(sessionStorage.getItem(storKey)||"{}");
+        // Fuente 2: localStorage queue (cambios pendientes de sincronizar, sobreviven cierre)
         var isRecib=storKey.indexOf("recib")>=0;
         var queue=JSON.parse(localStorage.getItem("xperts_pending_queue")||"[]");
         var queueMap={};
         queue.filter(function(c){return isRecib?(c.sheet==="facturas_recibidas"):(c.sheet==="facturas_emitidas");})
           .forEach(function(c){if(!queueMap[c.id])queueMap[c.id]={};queueMap[c.id][c.field]=c.val;});
+
         return rows.map(function(r){
           var k=String(r.id||"");
-          var fromSession=ov[k]||{};
-          var fromQueue=queueMap[k]||{};
+          var kComp=(r.colaborador!=null)
+            ?(String(r.colaborador||"").trim()+"|"+String(r.anio||"").trim()+"|"+String(r.mes||"").trim())
+            :(String(r.nro_factura||"").trim()+"|"+String(r.cliente||"").trim()+"|"+String(r.anio||"").trim()+"|"+String(r.mes||"").trim());
+          // Aplicar en orden: base -> sessionStorage -> localStorage queue (más reciente gana)
+          var fromSession=ov[k]||ov[kComp]||{};
+          var fromQueue=queueMap[k]||queueMap[kComp]||{};
           var merged=Object.assign({},fromSession,fromQueue);
           return Object.keys(merged).length>0?Object.assign({},r,merged):r;
         });
@@ -1048,12 +1055,9 @@ var FacturacionView=function(xFCProps){
       }).then(function(){return true;}).catch(function(){return false;});
     });
     Promise.all(batches).then(function(){
-      // Limpiar queue local — los cambios llegaron al Sheets
-      try{localStorage.removeItem("xperts_pending_queue");}catch(e){}
-      try{sessionStorage.removeItem("xperts_emit_overrides");sessionStorage.removeItem("xperts_recib_overrides");}catch(e){}
       xSetPending({});
-      xSetToast({msg:"✅ Cambios guardados en Google Sheets",ok:true});
-      setTimeout(function(){xSetToast(null);},3000);
+      xSetToast({msg:"💾 Cambios guardados localmente. Se sincronizarán cuando el Sheets esté disponible.",ok:true});
+      setTimeout(function(){xSetToast(null);},5000);
     });
   };
   var xPrintPDF=function(contentId,title){
@@ -1142,18 +1146,14 @@ var FacturacionView=function(xFCProps){
       var sueldos=recRows.reduce(function(s,r){return s+xNum(r.total_pagar);},0);
       var sueldosPagados=recRows.filter(function(r){return r.pagado==="SI";}).reduce(function(s,r){return s+xNum(r.total_pagar);},0);
       var rent=facturado-sueldos;
-      // Margen = ganancia / venta * 100 (qué % de la venta es ganancia)
-      var mg=facturado>0?Math.round((rent/facturado)*10000)/100:0;
-      // Markup = ganancia / costo * 100 (cuánto se ganó respecto al costo)
-      var markup=sueldos>0?Math.round((rent/sueldos)*10000)/100:0;
+      var mg=facturado>0?Math.round((rent/facturado)*100):0;
       var mesLabel=(mesNom.charAt(0).toUpperCase()+mesNom.slice(1))+" "+anio;
       return{mes:mes,mesLabel:mesLabel,anio:anio,mesNom:mesNom,
         facturado:facturado,cobrado:cobrado,pendienteCobro:pendienteCobro,
         sueldos:sueldos,sueldosPagados:sueldosPagados,rent:rent,mg:mg,
         facturas:emRows.length,
         pendientes:emRows.filter(function(r){return r.pago!=="PAGADA"&&r.pago!=="ANULADA";}).length,
-        anuladas:emRows.filter(function(r){return r.pago==="ANULADA";}).length,
-        markup:markup
+        anuladas:emRows.filter(function(r){return r.pago==="ANULADA";}).length
       };
     }).filter(function(d){return d.facturado>0||d.sueldos>0;});
 
@@ -1188,11 +1188,7 @@ var FacturacionView=function(xFCProps){
         React.createElement("div",{style:{fontSize:17,fontWeight:800,color:"#111827",lineHeight:1.1,wordBreak:"break-all"}},value),
         React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}},
           sub&&React.createElement("div",{style:{fontSize:11,color:"#9CA3AF"}},sub),
-          badge&&React.createElement("div",{
-            title:badge.tooltip||"",
-            style:{background:badge.bg,color:badge.color,borderRadius:8,padding:"2px 8px",fontSize:9,fontWeight:700,cursor:badge.tooltip?"help":"default",
-                   borderBottom:badge.tooltip?"1px dashed currentColor":"none",letterSpacing:"0.02em"}
-          },badge.text)
+          badge&&React.createElement("div",{style:{background:badge.bg,color:badge.color,borderRadius:8,padding:"2px 8px",fontSize:10,fontWeight:700}},badge.text)
         )
       );
     };
@@ -1260,23 +1256,10 @@ var FacturacionView=function(xFCProps){
             xFmtFull(xMesActual.sueldos-xMesActual.sueldosPagados)+" sin pagar",
             "#6B7280"
           ),
-          xKPI("💰","Ganancia Bruta",xFmtFull(xMesActual.rent),
-            "Facturado − Sueldos",
-            xMesActual.rent>=0?"#059669":"#DC2626"
-          ),
-          xKPI("📊","Margen Bruto",xMesActual.mg.toFixed(2)+"%",
-            "De cada $100 facturados, $"+xMesActual.mg.toFixed(0)+" son ganancia",
-            "#7C3AED",
-            {bg:xMesActual.mg>=60?"#D1FAE5":xMesActual.mg>=30?"#FEF3C7":"#FEE2E2",
-             color:xMesActual.mg>=60?"#065F46":xMesActual.mg>=30?"#92400E":"#991B1B",
-             text:"(Venta−Costo)/Venta"}
-          ),
-          xKPI("🚀","Rentabilidad / Markup",xMesActual.markup.toFixed(2)+"%",
-            "Por $1 invertido en sueldos → $"+(xMesActual.markup/100).toFixed(2)+" de ganancia",
-            "#059669",
-            {bg:xMesActual.markup>=200?"#D1FAE5":xMesActual.markup>=100?"#FEF3C7":"#FEE2E2",
-             color:xMesActual.markup>=200?"#065F46":xMesActual.markup>=100?"#92400E":"#991B1B",
-             text:"(Venta−Costo)/Costo"}
+          xKPI("📈","Resultado neto",xFmtFull(xMesActual.rent),
+            "Margen: "+xMesActual.mg+"%",
+            xMesActual.rent>=0?"#059669":"#DC2626",
+            {bg:xMesActual.mg>=50?"#D1FAE5":xMesActual.mg>=25?"#FEF3C7":"#FEE2E2",color:xMesActual.mg>=50?"#065F46":xMesActual.mg>=25?"#92400E":"#991B1B",text:xMesActual.mg+"%"}
           )
         )
       ),
@@ -1297,7 +1280,7 @@ var FacturacionView=function(xFCProps){
 
       // ── BLOQUE 3: RENTABILIDAD ───────────────────────────────────────────
       xRecientes.length>0&&xCard(React.createElement("div",null,
-        xSH("📈","Margen Bruto y Markup mes a mes","Barras = Ganancia Bruta (ARS) · % arriba = Margen · % debajo = Markup"),
+        xSH("📈","Rentabilidad neta mes a mes","Resultado = Facturado − Sueldos · % indica margen · ARS"),
         React.createElement("svg",{viewBox:"0 0 640 130",style:{width:"100%",height:130}},
           (function(){var W=640,H=100,PT=8,PB=28;
             var maxR=Math.max.apply(null,xRecientes.map(function(d){return Math.abs(d.rent);}));maxR=maxR||1;
@@ -1314,11 +1297,8 @@ var FacturacionView=function(xFCProps){
                 React.createElement("text",{x:bx+bw/2,y:H-2,fontSize:8,fill:"#9CA3AF",textAnchor:"middle"},
                   d.mesLabel.split(" ")[0].substring(0,3)+". "+d.anio.slice(2)
                 ),
-                React.createElement("text",{x:bx+bw/2,y:isPos?by-3:by+h+9,fontSize:7,fontWeight:700,fill:color,textAnchor:"middle"},
-                  "M:"+d.mg.toFixed(1)+"%"
-                ),
-                React.createElement("text",{x:bx+bw/2,y:isPos?by-12:by+h+18,fontSize:7,fill:"#6B7280",textAnchor:"middle"},
-                  d.sueldos>0?"MK:"+d.markup.toFixed(0)+"%":""
+                React.createElement("text",{x:bx+bw/2,y:isPos?by-3:by+h+9,fontSize:8,fontWeight:700,fill:color,textAnchor:"middle"},
+                  d.mg+"%"
                 )
               );
             });
@@ -1358,16 +1338,14 @@ var FacturacionView=function(xFCProps){
                   {l:"Período",a:"left"},
                   {l:"Facturado",a:"right"},
                   {l:"Cobrado",a:"right"},
-                  {l:"Pendiente",a:"right"},
+                  {l:"Pendiente de cobro",a:"right"},
                   {l:"Sueldos",a:"right"},
-                  {l:"Ganancia Bruta",a:"right"},
-                  {l:"Margen %",a:"center",tip:"(Venta−Costo)/Venta×100"},
-                  {l:"Markup %",a:"center",tip:"(Venta−Costo)/Costo×100"},
-                  {l:"Fact.",a:"center"},
-                  {l:"Pend.",a:"center"}
+                  {l:"Resultado neto",a:"right"},
+                  {l:"Margen",a:"center"},
+                  {l:"Facturas",a:"center"},
+                  {l:"Sin cobrar",a:"center"}
                 ].map(function(col,ci){
-                  return React.createElement("th",{key:ci,title:col.tip||"",style:{background:"#1F2937",color:"#fff",padding:"9px 10px",textAlign:col.a,fontSize:10,fontWeight:700,whiteSpace:"nowrap",borderBottom:"2px solid #7C3AED",cursor:col.tip?"help":"default"}},
-                    col.l,col.tip&&React.createElement("span",{style:{marginLeft:3,opacity:0.6,fontSize:9}},"ⓘ"));
+                  return React.createElement("th",{key:ci,style:{background:"#1F2937",color:"#fff",padding:"9px 10px",textAlign:col.a,fontSize:10,fontWeight:700,whiteSpace:"nowrap",borderBottom:"2px solid #7C3AED"}},col.l);
                 })
               )
             ),
@@ -1386,16 +1364,8 @@ var FacturacionView=function(xFCProps){
                   React.createElement("td",{style:{padding:"8px 10px",textAlign:"right",color:m.pendienteCobro>0?"#D97706":"#9CA3AF",fontWeight:m.pendienteCobro>0?600:400,borderBottom:"1px solid #F3F4F6"}},m.pendienteCobro>0?xFmtFull(m.pendienteCobro):"—"),
                   React.createElement("td",{style:{padding:"8px 10px",textAlign:"right",color:"#374151",borderBottom:"1px solid #F3F4F6"}},m.sueldos>0?xFmtFull(m.sueldos):"—"),
                   React.createElement("td",{style:{padding:"8px 10px",textAlign:"right",fontWeight:800,color:isPos?"#059669":"#DC2626",background:isPos?"#F0FDF4":"#FEF2F2",borderBottom:"1px solid #F3F4F6"}},xFmtFull(m.rent)),
-                  React.createElement("td",{title:"Margen = (Venta−Costo)/Venta × 100",style:{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #F3F4F6",cursor:"help"}},
-                    React.createElement("span",{style:{background:mgBg,color:mgC,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:800}},m.mg.toFixed(2)+"%")
-                  ),
-                  React.createElement("td",{title:"Markup = (Venta−Costo)/Costo × 100",style:{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #F3F4F6",cursor:"help"}},
-                    (function(){
-                      var mkC=m.markup>=300?"#065F46":m.markup>=150?"#92400E":"#991B1B";
-                      var mkBg=m.markup>=300?"#D1FAE5":m.markup>=150?"#FEF3C7":"#FEE2E2";
-                      return React.createElement("span",{style:{background:mkBg,color:mkC,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:800}},
-                        m.sueldos>0?m.markup.toFixed(2)+"%":"—");
-                    })()
+                  React.createElement("td",{style:{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #F3F4F6"}},
+                    React.createElement("span",{style:{background:mgBg,color:mgC,padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:800}},m.mg+"%")
                   ),
                   React.createElement("td",{style:{padding:"8px 10px",textAlign:"center",color:"#374151",borderBottom:"1px solid #F3F4F6"}},m.facturas),
                   React.createElement("td",{style:{padding:"8px 10px",textAlign:"center",borderBottom:"1px solid #F3F4F6"}},
@@ -1443,7 +1413,7 @@ var FacturacionView=function(xFCProps){
                 xTD((row.anio||"-")+(row.mes?" "+row.mes:"")),xTD(row.cliente||"-"),xTD(row.concepto||"-"),xTD(row.nro_factura||"-"),
                 xTD(xFmt(row.base_imponible),"right"),xTD(xFmt(row.monto),"right"),
                 xTD(xTotalCIVA?xFmt(xTotalCIVA):"-","right","#F5F3FF"),
-                xTD(row.cuit||"-"),xTD(React.createElement("select",{value:row.pago||"PENDIENTE",onChange:function(e){var newVal=e.target.value;xSetEmitidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,pago:newVal}:r2;});});xSaveField("facturas_emitidas",String(row.id||""),"pago",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.pago==="PAGADA"?"#D1FAE5":row.pago==="ENVIADA"?"#DBEAFE":row.pago==="ANULADA"?"#F3F4F6":"#FEF3C7",color:row.pago==="PAGADA"?"#065F46":row.pago==="ENVIADA"?"#1D4ED8":row.pago==="ANULADA"?"#374151":"#92400E"}},React.createElement("option",{value:"PENDIENTE"},"PENDIENTE"),React.createElement("option",{value:"ENVIADA"},"ENVIADA"),React.createElement("option",{value:"PAGADA"},"PAGADA"),React.createElement("option",{value:"ANULADA"},"ANULADA"))),xTD(React.createElement("input",{type:"text",defaultValue:row.notas||"",onBlur:function(e){var newVal=e.target.value;xSetEmitidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,notas:newVal}:r2;});});xSaveField("facturas_emitidas",String(row.id||""),"notas",newVal);},style:{border:"none",borderBottom:"1px solid transparent",background:"transparent",fontSize:11,padding:"2px 4px",width:"100%",minWidth:160,outline:"none",fontFamily:"inherit"},onFocus:function(e){e.target.style.borderBottomColor="#7C3AED";e.target.style.background="#F5F3FF";}}))
+                xTD(row.cuit||"-"),xTD(React.createElement("select",{value:row.pago||"PENDIENTE",onChange:function(e){var newVal=e.target.value;xSetEmitidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,pago:newVal}:r2;});});xSaveField("facturas_emitidas",row.id||(String(row.nro_factura||"").trim()+"|"+String(row.cliente||"").trim()+"|"+String(row.anio||"").trim()+"|"+String(row.mes||"").trim()),"pago",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.pago==="PAGADA"?"#D1FAE5":row.pago==="ENVIADA"?"#DBEAFE":row.pago==="ANULADA"?"#F3F4F6":"#FEF3C7",color:row.pago==="PAGADA"?"#065F46":row.pago==="ENVIADA"?"#1D4ED8":row.pago==="ANULADA"?"#374151":"#92400E"}},React.createElement("option",{value:"PENDIENTE"},"PENDIENTE"),React.createElement("option",{value:"ENVIADA"},"ENVIADA"),React.createElement("option",{value:"PAGADA"},"PAGADA"),React.createElement("option",{value:"ANULADA"},"ANULADA"))),xTD(React.createElement("input",{type:"text",value:row.notas||"",onChange:function(e){var newVal=e.target.value;xSetEmitidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,notas:newVal}:r2;});});},onBlur:function(e){xSaveField("facturas_emitidas",row.id||(String(row.nro_factura||"").trim()+"|"+String(row.cliente||"").trim()+"|"+String(row.anio||"").trim()+"|"+String(row.mes||"").trim()),"notas",e.target.value);},style:{border:"none",borderBottom:"1px solid transparent",background:"transparent",fontSize:11,padding:"2px 4px",width:"100%",minWidth:160,outline:"none",fontFamily:"inherit"},onFocus:function(e){e.target.style.borderBottomColor="#7C3AED";e.target.style.background="#F5F3FF";}}))
               );
             }),
             React.createElement("tr",{style:{background:"#F5F3FF",fontWeight:800}},
@@ -1501,8 +1471,8 @@ var FacturacionView=function(xFCProps){
                 xTD(xFmt(row.aumento),"right"),xTD(xFmt(row.honorarios_actuales),"right","#ECFDF5"),
                 xTD(xFmt(row.horas_extra_50),"right"),xTD(xFmt(row.horas_extra_100),"right"),
                 xTD(xFmt(row.iva),"right"),xTD(xFmt(row.total_pagar),"right","#F5F3FF"),
-                xTD(React.createElement("select",{value:row.pagado||"NO",onChange:function(e){var newVal=e.target.value;xSetRecibidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,pagado:newVal}:r2;});});xSaveField("facturas_recibidas",String(row.id||""),"pagado",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.pagado==="SI"?"#D1FAE5":row.pagado==="PENDIENTE"?"#DBEAFE":"#FEF3C7",color:row.pagado==="SI"?"#065F46":row.pagado==="PENDIENTE"?"#1D4ED8":"#92400E"}},React.createElement("option",{value:"NO"},"PENDIENTE"),React.createElement("option",{value:"PENDIENTE"},"EN PROCESO"),React.createElement("option",{value:"SI"},"PAGADA"))),
-                xTD(React.createElement("select",{value:row.factura_recibida||"NO",onChange:function(e){var newVal=e.target.value;xSetRecibidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,factura_recibida:newVal}:r2;});});xSaveField("facturas_recibidas",String(row.id||""),"factura_recibida",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.factura_recibida==="SI"?"#D1FAE5":"#FEF3C7",color:row.factura_recibida==="SI"?"#065F46":"#92400E"}},React.createElement("option",{value:"NO"},"NO"),React.createElement("option",{value:"SI"},"SI"))),xTD(row.alias||"-"),xTD(React.createElement("input",{type:"text",defaultValue:row.notas||"",onBlur:function(e){var newVal=e.target.value;xSetRecibidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,notas:newVal}:r2;});});xSaveField("facturas_recibidas",String(row.id||""),"notas",newVal);},style:{border:"none",borderBottom:"1px solid transparent",background:"transparent",fontSize:11,padding:"2px 4px",width:"100%",minWidth:160,outline:"none",fontFamily:"inherit"},onFocus:function(e){e.target.style.borderBottomColor="#7C3AED";e.target.style.background="#F5F3FF";}}))
+                xTD(React.createElement("select",{value:row.pagado||"NO",onChange:function(e){var newVal=e.target.value;xSetRecibidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,pagado:newVal}:r2;});});xSaveField("facturas_recibidas",row.id||(String(row.colaborador||"").trim()+"|"+String(row.anio||"").trim()+"|"+String(row.mes||"").trim()),"pagado",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.pagado==="SI"?"#D1FAE5":row.pagado==="PENDIENTE"?"#DBEAFE":"#FEF3C7",color:row.pagado==="SI"?"#065F46":row.pagado==="PENDIENTE"?"#1D4ED8":"#92400E"}},React.createElement("option",{value:"NO"},"PENDIENTE"),React.createElement("option",{value:"PENDIENTE"},"EN PROCESO"),React.createElement("option",{value:"SI"},"PAGADA"))),
+                xTD(React.createElement("select",{value:row.factura_recibida||"NO",onChange:function(e){var newVal=e.target.value;xSetRecibidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,factura_recibida:newVal}:r2;});});xSaveField("facturas_recibidas",row.id||(String(row.colaborador||"").trim()+"|"+String(row.anio||"").trim()+"|"+String(row.mes||"").trim()),"factura_recibida",newVal);},style:{border:"none",borderRadius:20,fontSize:11,fontWeight:700,cursor:"pointer",padding:"3px 10px",background:row.factura_recibida==="SI"?"#D1FAE5":"#FEF3C7",color:row.factura_recibida==="SI"?"#065F46":"#92400E"}},React.createElement("option",{value:"NO"},"NO"),React.createElement("option",{value:"SI"},"SI"))),xTD(row.alias||"-"),xTD(React.createElement("input",{type:"text",value:row.notas||"",onChange:function(e){var newVal=e.target.value;xSetRecibidas(function(prev){return prev.map(function(r2){return r2===row?{...r2,notas:newVal}:r2;});});},onBlur:function(e){xSaveField("facturas_recibidas",row.id||(String(row.colaborador||"").trim()+"|"+String(row.anio||"").trim()+"|"+String(row.mes||"").trim()),"notas",e.target.value);},style:{border:"none",borderBottom:"1px solid transparent",background:"transparent",fontSize:11,padding:"2px 4px",width:"100%",minWidth:160,outline:"none",fontFamily:"inherit"},onFocus:function(e){e.target.style.borderBottomColor="#7C3AED";e.target.style.background="#F5F3FF";}}))
               );
             }),
             React.createElement("tr",{style:{background:"#F5F3FF",fontWeight:800}},
